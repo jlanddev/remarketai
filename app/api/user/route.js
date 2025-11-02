@@ -1,8 +1,18 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { cookies } from 'next/headers';
 
 export async function GET(request) {
-  const user = await getCurrentUser();
+  // Get current user from cookie
+  let user = null;
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('remarket_session');
+    if (sessionCookie) {
+      user = JSON.parse(sessionCookie.value);
+    }
+  } catch (error) {
+    console.error('Error reading session:', error);
+  }
 
   if (!user) {
     return NextResponse.json({

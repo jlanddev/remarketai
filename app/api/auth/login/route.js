@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 // Import users from signup route
 let users;
@@ -46,19 +45,8 @@ export async function POST(request) {
 
     console.log(`✅ User logged in: ${email}`);
 
-    // Set session cookie
-    cookies().set('remarket_session', JSON.stringify({
-      userId: user.id,
-      email: user.email,
-      clientId: user.clientId
-    }), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7 // 7 days
-    });
-
-    return NextResponse.json({
+    // Create response with session cookie
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -69,6 +57,20 @@ export async function POST(request) {
         apiKey: user.apiKey
       }
     });
+
+    // Set session cookie
+    response.cookies.set('remarket_session', JSON.stringify({
+      userId: user.id,
+      email: user.email,
+      clientId: user.clientId
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7 // 7 days
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Login error:', error);
