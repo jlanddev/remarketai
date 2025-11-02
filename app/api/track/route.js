@@ -118,15 +118,75 @@ function saveData() {
 // Load data on module import
 loadData();
 
+// Enrich visitor with People Data Labs
+async function enrichVisitorWithPDL(visitorId, ipAddress) {
+  if (!process.env.PDL_API_KEY) {
+    console.log('⚠️  No PDL API key - skipping enrichment');
+    return null;
+  }
+
+  try {
+    console.log(`🔍 Enriching visitor ${visitorId} with PDL (IP: ${ipAddress})`);
+
+    const response = await fetch('https://api.peopledatalabs.com/v5/person/identify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-Key': process.env.PDL_API_KEY
+      },
+      body: JSON.stringify({
+        ip: ipAddress
+      })
+    });
+
+    if (!response.ok) {
+      console.log(`⚠️  PDL API error: ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+
+    if (result.status === 200 && result.data) {
+      const enrichedData = {
+        full_name: result.data.full_name,
+        first_name: result.data.first_name,
+        last_name: result.data.last_name,
+        emails: result.data.emails || [],
+        phone_numbers: result.data.phone_numbers || [],
+        job_title: result.data.job_title,
+        job_company_name: result.data.job_company_name,
+        linkedin_url: result.data.linkedin_url,
+        location_name: result.data.location_name,
+        pdl_id: result.data.id
+      };
+
+      console.log(`✅ PDL enriched: ${enrichedData.full_name || 'Unknown'} (${enrichedData.emails?.[0] || 'No email'})`);
+      return enrichedData;
+    }
+
+    console.log('⚠️  PDL: No data found for this IP');
+    return null;
+  } catch (error) {
+    console.error('❌ PDL enrichment error:', error.message);
+    return null;
+  }
+}
+
 export async function POST(request) {
   try {
     const data = await request.json();
+
+    // Get IP address from request
+    const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+                      request.headers.get('x-real-ip') ||
+                      '0.0.0.0';
 
     // Store event
     const event = {
       ...data,
       server_timestamp: new Date().toISOString(),
-      id: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      id: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ip_address: ipAddress
     };
 
     events.push(event);
@@ -144,7 +204,34 @@ export async function POST(request) {
         email: null,
         name: null,
         phone: null,
-        client_id: data.client_id
+        client_id: data.client_id,
+        ip_address: ipAddress,
+        pdl_enriched: false
+      });
+
+      // Enrich visitor with People Data Labs (async, don't wait)
+      enrichVisitorWithPDL(visitorId, ipAddress).then(enrichedData => {
+        if (enrichedData) {
+          const visitor = visitors.get(visitorId);
+          if (visitor) {
+            visitor.email = enrichedData.emails?.[0] || visitor.email;
+            visitor.name = enrichedData.full_name || visitor.name;
+            visitor.phone = enrichedData.phone_numbers?.[0] || visitor.phone;
+            visitor.job_title = enrichedData.job_title;
+            visitor.company = enrichedData.job_company_name;
+            visitor.linkedin = enrichedData.linkedin_url;
+            visitor.location = enrichedData.location_name;
+            visitor.pdl_enriched = true;
+            visitor.pdl_data = enrichedData;
+
+            // Save updated visitor data
+            saveData();
+
+            console.log(`✅ Visitor ${visitorId} enriched with PDL data`);
+          }
+        }
+      }).catch(err => {
+        console.error('PDL enrichment error:', err);
       });
     }
 
