@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 const anthropic = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY || 'sk-ant-api03-kQnHWKmhTlWnpQQaSwVlNt96-UMm3tqOVxcMvb-8GE2pBj8Ah6bw5z5c6ifGgG1jKgM8kXmJfHZMwFOXAn4E5Q-B0wd7AAA'
+  apiKey: process.env.ANTHROPIC_API_KEY
 });
 
 // Fetch website content
