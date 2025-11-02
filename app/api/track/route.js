@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getStore } from '@netlify/blobs';
 import fs from 'fs';
 import path from 'path';
 
@@ -7,116 +8,88 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-// Persistent storage files
-const DATA_DIR = path.join(process.cwd(), 'data');
-const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
-const VISITORS_FILE = path.join(DATA_DIR, 'visitors.json');
-const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
-const CAMPAIGNS_FILE = path.join(DATA_DIR, 'campaigns.json');
-const TRIGGERS_FILE = path.join(DATA_DIR, 'triggers.json');
+// Get blob store
+function getBlobStore() {
+  return getStore('attrios-tracking');
+}
 
-// In-memory storage (synced with disk)
-let events = [];
-let visitors = new Map();
-let sessions = new Map();
-let campaigns = [];
-let firedTriggers = new Set();
-
-// Load data from disk on startup
-function loadData() {
+// Load all tracking data from Netlify Blobs
+async function loadAllData() {
   try {
-    // Ensure data directory exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
+    const store = getBlobStore();
 
-    // Load events
-    if (fs.existsSync(EVENTS_FILE)) {
-      const eventsData = fs.readFileSync(EVENTS_FILE, 'utf-8');
-      events = JSON.parse(eventsData);
-      console.log(`✅ Loaded ${events.length} events from disk`);
-    }
+    const [eventsData, visitorsData, sessionsData, campaignsData, triggersData] = await Promise.all([
+      store.get('events'),
+      store.get('visitors'),
+      store.get('sessions'),
+      store.get('campaigns'),
+      store.get('triggers')
+    ]);
 
-    // Load visitors
-    if (fs.existsSync(VISITORS_FILE)) {
-      const visitorsData = fs.readFileSync(VISITORS_FILE, 'utf-8');
-      const visitorsArray = JSON.parse(visitorsData);
-      visitors = new Map(visitorsArray.map(v => [v.id, {
-        ...v,
-        sessions: new Set(v.sessions)
-      }]));
-      console.log(`✅ Loaded ${visitors.size} visitors from disk`);
-    }
+    const events = eventsData ? JSON.parse(eventsData) : [];
 
-    // Load sessions
-    if (fs.existsSync(SESSIONS_FILE)) {
-      const sessionsData = fs.readFileSync(SESSIONS_FILE, 'utf-8');
-      const sessionsArray = JSON.parse(sessionsData);
-      sessions = new Map(sessionsArray.map(s => [s.id, {
-        ...s,
-        pages_viewed: new Set(s.pages_viewed)
-      }]));
-      console.log(`✅ Loaded ${sessions.size} sessions from disk`);
-    }
+    const visitorsArray = visitorsData ? JSON.parse(visitorsData) : [];
+    const visitors = new Map(visitorsArray.map(v => [v.id, {
+      ...v,
+      sessions: new Set(v.sessions)
+    }]));
 
-    // Load campaigns
-    if (fs.existsSync(CAMPAIGNS_FILE)) {
-      const campaignsData = fs.readFileSync(CAMPAIGNS_FILE, 'utf-8');
-      campaigns = JSON.parse(campaignsData);
-      console.log(`✅ Loaded ${campaigns.length} campaigns from disk`);
-    }
+    const sessionsArray = sessionsData ? JSON.parse(sessionsData) : [];
+    const sessions = new Map(sessionsArray.map(s => [s.id, {
+      ...s,
+      pages_viewed: new Set(s.pages_viewed)
+    }]));
 
-    // Load triggered flags
-    if (fs.existsSync(TRIGGERS_FILE)) {
-      const triggersData = fs.readFileSync(TRIGGERS_FILE, 'utf-8');
-      firedTriggers = new Set(JSON.parse(triggersData));
-      console.log(`✅ Loaded ${firedTriggers.size} fired triggers from disk`);
-    }
+    const campaigns = campaignsData ? JSON.parse(campaignsData) : [];
+    const firedTriggers = new Set(triggersData ? JSON.parse(triggersData) : []);
 
-    console.log('🚀 All tracking data loaded successfully');
+    console.log(`✅ Loaded from Netlify Blobs: ${events.length} events, ${visitors.size} visitors, ${sessions.size} sessions`);
+
+    return { events, visitors, sessions, campaigns, firedTriggers };
   } catch (error) {
-    console.error('❌ Error loading tracking data:', error);
+    console.error('❌ Error loading from Netlify Blobs:', error);
+    return {
+      events: [],
+      visitors: new Map(),
+      sessions: new Map(),
+      campaigns: [],
+      firedTriggers: new Set()
+    };
   }
 }
 
-// Save data to disk
-function saveData() {
+// Save all tracking data to Netlify Blobs
+async function saveAllData(events, visitors, sessions, campaigns, firedTriggers) {
   try {
-    // Ensure data directory exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
+    const store = getBlobStore();
 
-    // Save events
-    fs.writeFileSync(EVENTS_FILE, JSON.stringify(events, null, 2));
-
-    // Save visitors (convert Set to Array for JSON)
+    // Convert Maps and Sets to arrays for storage
     const visitorsArray = Array.from(visitors.values()).map(v => ({
       ...v,
       sessions: Array.from(v.sessions)
     }));
-    fs.writeFileSync(VISITORS_FILE, JSON.stringify(visitorsArray, null, 2));
 
-    // Save sessions (convert Set to Array for JSON)
     const sessionsArray = Array.from(sessions.values()).map(s => ({
       ...s,
       pages_viewed: Array.from(s.pages_viewed)
     }));
-    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessionsArray, null, 2));
 
-    // Save campaigns
-    fs.writeFileSync(CAMPAIGNS_FILE, JSON.stringify(campaigns, null, 2));
+    const triggersArray = Array.from(firedTriggers);
 
-    // Save triggers
-    fs.writeFileSync(TRIGGERS_FILE, JSON.stringify(Array.from(firedTriggers), null, 2));
+    // Save all data in parallel
+    await Promise.all([
+      store.set('events', JSON.stringify(events)),
+      store.set('visitors', JSON.stringify(visitorsArray)),
+      store.set('sessions', JSON.stringify(sessionsArray)),
+      store.set('campaigns', JSON.stringify(campaigns)),
+      store.set('triggers', JSON.stringify(triggersArray))
+    ]);
 
+    console.log(`✅ Saved to Netlify Blobs: ${events.length} events, ${visitors.size} visitors`);
   } catch (error) {
-    console.error('❌ Error saving tracking data:', error);
+    console.error('❌ Error saving to Netlify Blobs:', error);
   }
 }
-
-// Load data on module import
-loadData();
 
 // Enrich visitor with People Data Labs
 async function enrichVisitorWithPDL(visitorId, ipAddress) {
@@ -175,6 +148,9 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
 export async function POST(request) {
   try {
     const data = await request.json();
+
+    // Load tracking data from Netlify Blobs
+    const { events, visitors, sessions, campaigns, firedTriggers } = await loadAllData();
 
     // Get IP address from request
     const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0] ||
@@ -306,10 +282,10 @@ export async function POST(request) {
     }
 
     // Check for triggers (e.g., abandoned cart, high engagement, etc.)
-    await checkTriggers(visitor, session, event);
+    await checkTriggers(visitor, session, event, events, visitors, sessions, campaigns, firedTriggers);
 
-    // Save all data to disk after processing
-    saveData();
+    // Save all data to Netlify Blobs after processing
+    await saveAllData(events, visitors, sessions, campaigns, firedTriggers);
 
     return NextResponse.json({
       success: true,
@@ -326,6 +302,9 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
+  // Load tracking data from Netlify Blobs
+  const { events, visitors, sessions, campaigns } = await loadAllData();
+
   // Get client_id from query params (for user-specific dashboards)
   const { searchParams } = new URL(request.url);
   const clientIdFilter = searchParams.get('client_id');
@@ -458,7 +437,7 @@ function getActivePages(events) {
 }
 
 // Check if any triggers should fire and generate AI emails
-async function checkTriggers(visitor, session, event) {
+async function checkTriggers(visitor, session, event, events, visitors, sessions, campaigns, firedTriggers) {
   if (!visitor.email) return; // Need email to send remarketing
 
   const triggerKey = (type) => `${visitor.id}_${type}`;
@@ -477,7 +456,7 @@ async function checkTriggers(visitor, session, event) {
       logVisitorActivity(visitor.client_id, visitor, event, 'abandoned_page');
     }
 
-    await generateAndStoreCampaign(visitor, 'abandoned_page');
+    await generateAndStoreCampaign(visitor, 'abandoned_page', events, campaigns);
   }
 
   // Trigger 2: High engagement (>15s on site, >1 page, >50% scroll)
@@ -494,7 +473,7 @@ async function checkTriggers(visitor, session, event) {
       logVisitorActivity(visitor.client_id, visitor, event, 'high_engagement');
     }
 
-    await generateAndStoreCampaign(visitor, 'high_engagement');
+    await generateAndStoreCampaign(visitor, 'high_engagement', events, campaigns);
   }
 
   // Trigger 3: Manual test trigger (for easy testing)
@@ -509,7 +488,7 @@ async function checkTriggers(visitor, session, event) {
       logVisitorActivity(visitor.client_id, visitor, event, 'high_engagement');
     }
 
-    await generateAndStoreCampaign(visitor, 'high_engagement');
+    await generateAndStoreCampaign(visitor, 'high_engagement', events, campaigns);
   }
 
   // Trigger 3: Returning visitor (2+ sessions)
@@ -524,7 +503,7 @@ async function checkTriggers(visitor, session, event) {
       logVisitorActivity(visitor.client_id, visitor, event, 'returning_visitor');
     }
 
-    await generateAndStoreCampaign(visitor, 'returning_visitor');
+    await generateAndStoreCampaign(visitor, 'returning_visitor', events, campaigns);
   }
 
   // Trigger 4: Form abandoned
@@ -534,15 +513,15 @@ async function checkTriggers(visitor, session, event) {
 
     console.log(`🎯 TRIGGER: Form abandoned for ${visitor.email}`);
     firedTriggers.add(triggerKey('form_abandoned'));
-    await generateAndStoreCampaign(visitor, 'form_abandoned');
+    await generateAndStoreCampaign(visitor, 'form_abandoned', events, campaigns);
   }
 }
 
 // Generate AI email using Claude and store campaign
-async function generateAndStoreCampaign(visitor, triggerType) {
+async function generateAndStoreCampaign(visitor, triggerType, events, campaigns) {
   try {
     // Build detailed visitor profile for AI
-    const visitorProfile = buildVisitorProfile(visitor);
+    const visitorProfile = buildVisitorProfile(visitor, events);
 
     // Use Claude AI to generate value-based, human email
     const email = await generateClaudeEmail(visitorProfile, triggerType);
@@ -566,14 +545,12 @@ async function generateAndStoreCampaign(visitor, triggerType) {
     campaigns.push(campaign);
     console.log(`✅ Claude generated email for ${visitor.email}: "${email.subject}"`);
 
-    // Save campaigns to disk
-    saveData();
-
     return campaign;
   } catch (error) {
     console.error('❌ Campaign generation error:', error);
 
     // Fallback to basic email if Claude fails
+    const visitorProfile = buildVisitorProfile(visitor, events);
     const email = generatePersonalizedEmail(visitorProfile, triggerType);
     const campaign = {
       id: `camp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -588,15 +565,12 @@ async function generateAndStoreCampaign(visitor, triggerType) {
     };
     campaigns.push(campaign);
 
-    // Save campaigns to disk
-    saveData();
-
     return campaign;
   }
 }
 
 // Build detailed visitor profile for AI email generation
-function buildVisitorProfile(visitor) {
+function buildVisitorProfile(visitor, events) {
   const allEvents = events.filter(e => e.visitor_id === visitor.id);
 
   // Aggregate page data
