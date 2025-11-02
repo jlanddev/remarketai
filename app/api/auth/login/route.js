@@ -1,26 +1,27 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getStore } from '@netlify/blobs';
 
-// Persistent storage file
-const DATA_FILE = path.join(process.cwd(), 'data', 'users.json');
-
-// Load users from file
-function loadUsers() {
+// Get users from Netlify Blobs
+async function getUsers() {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = fs.readFileSync(DATA_FILE, 'utf-8');
-      const usersArray = JSON.parse(data);
-      const users = new Map();
-      usersArray.forEach(user => {
-        users.set(user.email, user);
-      });
-      return users;
+    const store = getStore('attrios-users');
+    const usersData = await store.get('all-users');
+
+    if (!usersData) {
+      return new Map();
     }
+
+    const usersArray = JSON.parse(usersData);
+    const users = new Map();
+    usersArray.forEach(user => {
+      users.set(user.email, user);
+    });
+
+    return users;
   } catch (error) {
-    console.error('Error loading users:', error);
+    console.error('Error loading users from Netlify Blobs:', error);
+    return new Map();
   }
-  return new Map();
 }
 
 // Simple password hashing (must match signup)
@@ -40,8 +41,8 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // Load users from disk
-    const users = loadUsers();
+    // Load users from Netlify Blobs
+    const users = await getUsers();
 
     // Find user
     const user = users.get(email);

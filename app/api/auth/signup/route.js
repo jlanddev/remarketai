@@ -1,45 +1,40 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getStore } from '@netlify/blobs';
 
-// Persistent storage file
-const DATA_FILE = path.join(process.cwd(), 'data', 'users.json');
-
-// In-memory user storage (synced with file)
-const users = new Map();
-
-// Load users from file on startup
-function loadUsers() {
+// Get users from Netlify Blobs
+async function getUsers() {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = fs.readFileSync(DATA_FILE, 'utf-8');
-      const usersArray = JSON.parse(data);
-      usersArray.forEach(user => {
-        users.set(user.email, user);
-      });
-      console.log(`✅ Loaded ${users.size} users from disk`);
+    const store = getStore('attrios-users');
+    const usersData = await store.get('all-users');
+
+    if (!usersData) {
+      return new Map();
     }
+
+    const usersArray = JSON.parse(usersData);
+    const users = new Map();
+    usersArray.forEach(user => {
+      users.set(user.email, user);
+    });
+
+    return users;
   } catch (error) {
-    console.error('Error loading users:', error);
+    console.error('Error loading users from Netlify Blobs:', error);
+    return new Map();
   }
 }
 
-// Save users to file
-function saveUsers() {
+// Save users to Netlify Blobs
+async function saveUsers(users) {
   try {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    const store = getStore('attrios-users');
     const usersArray = Array.from(users.values());
-    fs.writeFileSync(DATA_FILE, JSON.stringify(usersArray, null, 2));
+    await store.set('all-users', JSON.stringify(usersArray));
+    console.log(`✅ Saved ${users.size} users to Netlify Blobs`);
   } catch (error) {
-    console.error('Error saving users:', error);
+    console.error('Error saving users to Netlify Blobs:', error);
   }
 }
-
-// Load users on module import
-loadUsers();
 
 // Simple password hashing (use bcrypt in production)
 function hashPassword(password) {
@@ -73,6 +68,9 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
+    // Load existing users
+    const users = await getUsers();
+
     // Check if user exists
     if (users.has(email)) {
       return NextResponse.json({
@@ -98,7 +96,7 @@ export async function POST(request) {
     };
 
     users.set(email, user);
-    saveUsers(); // Persist to disk
+    await saveUsers(users); // Persist to Netlify Blobs
 
     console.log(`✅ New user registered: ${email} (client_id: ${clientId})`);
 
