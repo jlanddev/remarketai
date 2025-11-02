@@ -22,16 +22,16 @@ export default function Home() {
 
             <div className="flex gap-4 justify-center mt-10">
               <a
-                href="/dashboard"
+                href="/signup"
                 className="px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-500/50"
               >
-                View Live Dashboard →
+                Start Free Trial →
               </a>
               <a
-                href="#features"
+                href="/login"
                 className="px-8 py-4 bg-gray-800 text-white text-lg font-bold rounded-lg hover:bg-gray-700 transition border border-gray-700"
               >
-                See How It Works
+                Sign In
               </a>
             </div>
           </div>
@@ -143,7 +143,7 @@ export default function Home() {
                 Paste one line of code into your website
               </p>
               <code className="block p-4 bg-black rounded border border-gray-700 text-xs text-green-400 font-mono overflow-x-auto">
-                {`<script src="http://localhost:3003/track.js?id=demo"></script>`}
+                {`<script src="https://your-site.com/track.js?id=YOUR_CLIENT_ID"></script>`}
               </code>
             </div>
 
@@ -170,16 +170,16 @@ export default function Home() {
 
           <div className="mt-10 flex gap-4">
             <a
-              href="/dashboard"
+              href="/signup"
               className="px-8 py-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-500/30"
             >
-              Launch Dashboard →
+              Get Started Free →
             </a>
             <a
-              href="#"
+              href="/login"
               className="px-8 py-4 bg-gray-800 text-white font-bold rounded-lg hover:bg-gray-700 transition border border-gray-600"
             >
-              View Documentation
+              Sign In
             </a>
           </div>
         </div>

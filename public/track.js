@@ -6,9 +6,13 @@
 (function() {
   'use strict';
 
-  // Configuration
-  const TRACK_API = 'http://localhost:3003/api/track';
-  const CLIENT_ID = new URLSearchParams(document.currentScript.src.split('?')[1]).get('id') || 'demo';
+  // Configuration - Dynamic API URL (works everywhere)
+  const SCRIPT_SRC = document.currentScript.src;
+  const SCRIPT_URL = new URL(SCRIPT_SRC);
+  const API_BASE = `${SCRIPT_URL.protocol}//${SCRIPT_URL.host}`;
+  const TRACK_API = `${API_BASE}/api/track`;
+  const IDENTIFY_API = `${API_BASE}/api/identify`;
+  const CLIENT_ID = new URLSearchParams(SCRIPT_SRC.split('?')[1]).get('id') || 'demo';
 
   // Generate or retrieve visitor ID
   function getVisitorId() {
@@ -183,7 +187,7 @@
     };
 
     // Send identification request
-    fetch('http://localhost:3003/api/identify', {
+    fetch(IDENTIFY_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
