@@ -101,14 +101,18 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
   try {
     console.log(`🔍 Enriching visitor ${visitorId} with PDL (IP: ${ipAddress})`);
 
-    const response = await fetch('https://api.peopledatalabs.com/v5/person/identify', {
+    // Use PDL Person Search API with IP parameter
+    const response = await fetch('https://api.peopledatalabs.com/v5/person/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Api-Key': process.env.PDL_API_KEY
       },
       body: JSON.stringify({
-        ip: ipAddress
+        query: {
+          ip_address: ipAddress
+        },
+        size: 1
       })
     });
 
@@ -119,21 +123,25 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
 
     const result = await response.json();
 
-    if (result.status === 200 && result.data) {
+    // Search API returns data in result.data array
+    if (result.status === 200 && result.data && result.data.length > 0) {
+      const person = result.data[0]; // Get first match
       const enrichedData = {
-        full_name: result.data.full_name,
-        first_name: result.data.first_name,
-        last_name: result.data.last_name,
-        emails: result.data.emails || [],
-        phone_numbers: result.data.phone_numbers || [],
-        job_title: result.data.job_title,
-        job_company_name: result.data.job_company_name,
-        linkedin_url: result.data.linkedin_url,
-        location_name: result.data.location_name,
-        pdl_id: result.data.id
+        full_name: person.full_name,
+        first_name: person.first_name,
+        last_name: person.last_name,
+        emails: person.emails || [],
+        phone_numbers: person.phone_numbers || [],
+        mobile_phone: person.mobile_phone,
+        job_title: person.job_title,
+        job_company_name: person.job_company_name,
+        linkedin_url: person.linkedin_url,
+        location_name: person.location_name,
+        pdl_id: person.id,
+        likelihood: person.likelihood || 0
       };
 
-      console.log(`✅ PDL enriched: ${enrichedData.full_name || 'Unknown'} (${enrichedData.emails?.[0] || 'No email'})`);
+      console.log(`✅ PDL enriched: ${enrichedData.full_name || 'Unknown'} (${enrichedData.emails?.[0] || 'No email'}) - Likelihood: ${enrichedData.likelihood}`);
       return { status: 'match_found', data: enrichedData };
     }
 
