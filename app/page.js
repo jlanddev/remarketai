@@ -11,7 +11,7 @@ export default function Home() {
               <span className="text-blue-400 text-sm font-medium">AI-POWERED REMARKETING</span>
             </div>
             <h1 className="text-6xl md:text-7xl font-black text-white mb-6 tracking-tight">
-              Remarket<span className="text-blue-500">AI</span>
+              Attrios
             </h1>
             <p className="text-3xl text-gray-300 font-bold mb-4">
               Turn Anonymous Visitors Into Paying Customers

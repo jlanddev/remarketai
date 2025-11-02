@@ -9,8 +9,10 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedVisitor, setSelectedVisitor] = useState(null);
+  const [selectedSession, setSelectedSession] = useState(null);
   const [sendingEmail, setSendingEmail] = useState(null);
   const [showTrackingScript, setShowTrackingScript] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview'); // overview, visitors, campaigns
 
   useEffect(() => {
     fetchUser();
@@ -69,6 +71,53 @@ export default function Dashboard() {
     alert('✅ Copied to clipboard!');
   }
 
+  // Analyze user intent based on behavior
+  function analyzeUserIntent(visitor) {
+    const intents = [];
+    const pages = visitor.pages || [];
+
+    // High engagement = strong interest
+    if (visitor.total_events > 50 || pages.some(p => p.total_time > 120)) {
+      intents.push({ type: 'High Interest', confidence: 95, icon: '🔥' });
+    }
+
+    // Deep scrolling = reading content thoroughly
+    const avgScroll = pages.reduce((sum, p) => sum + p.max_scroll, 0) / (pages.length || 1);
+    if (avgScroll > 75) {
+      intents.push({ type: 'Detail-Oriented', confidence: 85, icon: '📖' });
+    }
+
+    // Multiple sessions = returning interest
+    if (visitor.total_sessions > 1) {
+      intents.push({ type: 'Returning Visitor', confidence: 90, icon: '🔄' });
+    }
+
+    // Many clicks = actively exploring
+    const totalClicks = pages.reduce((sum, p) => sum + (p.clicks?.length || 0), 0);
+    if (totalClicks > 10) {
+      intents.push({ type: 'Active Explorer', confidence: 80, icon: '🔍' });
+    }
+
+    // Has email = identified lead
+    if (visitor.email) {
+      intents.push({ type: 'Qualified Lead', confidence: 100, icon: '✅' });
+    }
+
+    // URL pattern analysis
+    const urlPatterns = pages.map(p => p.url.toLowerCase());
+    if (urlPatterns.some(u => u.includes('pricing') || u.includes('plan'))) {
+      intents.push({ type: 'Price Shopping', confidence: 90, icon: '💰' });
+    }
+    if (urlPatterns.some(u => u.includes('about') || u.includes('team'))) {
+      intents.push({ type: 'Research Phase', confidence: 75, icon: '🏢' });
+    }
+    if (urlPatterns.some(u => u.includes('contact') || u.includes('demo'))) {
+      intents.push({ type: 'Ready to Buy', confidence: 95, icon: '🎯' });
+    }
+
+    return intents.length > 0 ? intents : [{ type: 'Browsing', confidence: 50, icon: '👀' }];
+  }
+
   async function sendEmail(campaign) {
     setSendingEmail(campaign.id);
     try {
@@ -117,7 +166,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-black text-white mb-1">
-                Remarket<span className="text-blue-500">AI</span> Intelligence
+                Attrios Intelligence
               </h1>
               <p className="text-gray-400">
                 {user?.company || user?.name || user?.email}'s Dashboard
@@ -151,24 +200,47 @@ export default function Dashboard() {
                 Add this script to your website's HTML (before closing {"</body>"} tag):
               </p>
               <div className="bg-black rounded-lg p-4 mb-4 font-mono text-sm relative">
-                <code className="text-green-400">
-                  {`<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://your-site.com'}/track.js?id=${user.clientId}"></script>`}
+                <code className="text-green-400 whitespace-pre-wrap break-all">
+                  {`<script src="${typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+                    ? window.location.origin
+                    : 'https://YOUR-SITE.netlify.app'}/track.js?id=${user.clientId}"></script>`}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(`<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://your-site.com'}/track.js?id=${user.clientId}"></script>`)}
+                  onClick={() => copyToClipboard(`<script src="${typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+                    ? window.location.origin
+                    : 'https://YOUR-SITE.netlify.app'}/track.js?id=${user.clientId}"></script>`)}
                   className="absolute top-2 right-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
                 >
                   Copy
                 </button>
               </div>
+              {typeof window !== 'undefined' && window.location.hostname.includes('localhost') && (
+                <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600/50 rounded-lg text-sm">
+                  <p className="text-yellow-400">
+                    ⚠️ Replace <code className="bg-black px-2 py-1 rounded">YOUR-SITE.netlify.app</code> with your actual Netlify URL
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-gray-500 mb-1">Client ID:</p>
+                  <p className="text-gray-500 mb-1">Your Client ID:</p>
                   <code className="text-blue-400 font-mono">{user.clientId}</code>
+                  <button
+                    onClick={() => copyToClipboard(user.clientId)}
+                    className="ml-2 text-xs text-blue-500 hover:text-blue-400"
+                  >
+                    Copy
+                  </button>
                 </div>
                 <div>
                   <p className="text-gray-500 mb-1">API Key:</p>
                   <code className="text-purple-400 font-mono text-xs">{user.apiKey}</code>
+                  <button
+                    onClick={() => copyToClipboard(user.apiKey)}
+                    className="ml-2 text-xs text-purple-500 hover:text-purple-400"
+                  >
+                    Copy
+                  </button>
                 </div>
               </div>
             </div>
@@ -177,6 +249,43 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-8 border-b border-gray-700">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+              activeTab === 'overview'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            📊 Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('visitors')}
+            className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+              activeTab === 'visitors'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            👥 Visitors ({stats?.total_visitors || 0})
+          </button>
+          <button
+            onClick={() => setActiveTab('campaigns')}
+            className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
+              activeTab === 'campaigns'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            📧 Campaigns ({stats?.total_campaigns || 0})
+          </button>
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
         {/* Stats Grid */}
         <div className="grid grid-cols-5 gap-6 mb-8">
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-blue-500 transition">
@@ -526,8 +635,15 @@ export default function Dashboard() {
                 <h3 className="text-white font-bold text-lg mb-2">No Events Yet</h3>
                 <p className="text-gray-400 mb-4">Waiting for tracking data...</p>
                 <code className="inline-block px-4 py-2 bg-black border border-gray-700 rounded text-xs text-green-400 font-mono">
-                  {`<script src="http://localhost:3003/track.js?id=demo"></script>`}
+                  {`<script src="${typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
+                    ? window.location.origin
+                    : 'https://YOUR-SITE.netlify.app'}/track.js?id=${user?.clientId || 'your-client-id'}"></script>`}
                 </code>
+                {typeof window !== 'undefined' && window.location.hostname.includes('localhost') && (
+                  <p className="text-yellow-400 text-xs mt-2">
+                    ⚠️ Replace YOUR-SITE.netlify.app with your actual domain
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -642,7 +758,385 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        </>
+        )}
+
+        {/* Visitors Tab */}
+        {activeTab === 'visitors' && (
+          <>
+            {/* Visitor List */}
+            {stats?.detailed_visitors && stats.detailed_visitors.length > 0 ? (
+              <div className="space-y-6">
+                {/* Visitor Cards */}
+                <div className="grid grid-cols-1 gap-4">
+                  {stats.detailed_visitors.map((visitor) => {
+                    const intents = analyzeUserIntent(visitor);
+                    const totalTime = visitor.pages?.reduce((sum, p) => sum + (p.total_time || 0), 0) || 0;
+                    const avgScroll = visitor.pages?.length > 0
+                      ? Math.round(visitor.pages.reduce((sum, p) => sum + (p.max_scroll || 0), 0) / visitor.pages.length)
+                      : 0;
+
+                    return (
+                      <div
+                        key={visitor.id}
+                        className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-blue-500/50 transition cursor-pointer"
+                        onClick={() => {
+                          setSelectedVisitor(visitor);
+                          // Set first session as selected by default
+                          if (visitor.sessions && visitor.sessions.length > 0) {
+                            setSelectedSession(visitor.sessions[0]);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          {/* Visitor Info */}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="text-white font-bold text-xl">
+                                {visitor.name || visitor.email || `Anonymous Visitor`}
+                              </h3>
+                              {visitor.email && (
+                                <span className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded text-xs text-green-400 font-bold">
+                                  ✓ IDENTIFIED
+                                </span>
+                              )}
+                            </div>
+                            {visitor.email && (
+                              <p className="text-blue-400 text-sm mb-1">{visitor.email}</p>
+                            )}
+                            {visitor.phone && (
+                              <p className="text-purple-400 text-sm mb-1">{visitor.phone}</p>
+                            )}
+                            <p className="text-gray-500 text-xs font-mono">{visitor.id}</p>
+                          </div>
+
+                          {/* Quick Stats */}
+                          <div className="text-right">
+                            <div className="text-gray-400 text-sm mb-2">
+                              <span className="text-white font-bold">{visitor.total_sessions}</span> sessions • <span className="text-white font-bold">{visitor.total_events}</span> events
+                            </div>
+                            <div className="text-gray-500 text-xs">
+                              Last seen: {new Date(visitor.last_seen).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Intent Badges */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {intents.slice(0, 4).map((intent, idx) => (
+                            <div
+                              key={idx}
+                              className="px-3 py-1.5 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg"
+                            >
+                              <span className="text-white font-medium text-sm">
+                                {intent.icon} {intent.type}
+                              </span>
+                              <span className="text-blue-400 text-xs ml-2">
+                                {intent.confidence}%
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Engagement Metrics */}
+                        <div className="grid grid-cols-3 gap-4 p-4 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                          <div>
+                            <div className="text-gray-500 text-xs mb-1">Total Time</div>
+                            <div className="text-pink-400 font-bold text-lg">{totalTime}s</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-500 text-xs mb-1">Avg Scroll</div>
+                            <div className="text-yellow-400 font-bold text-lg">{avgScroll}%</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-500 text-xs mb-1">Pages Viewed</div>
+                            <div className="text-blue-400 font-bold text-lg">{visitor.pages?.length || 0}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 text-center">
+                          <span className="text-blue-400 text-sm font-medium hover:text-blue-300">
+                            Click to view detailed profile →
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-20 text-center">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-white font-bold text-lg mb-2">No Visitors Yet</h3>
+                <p className="text-gray-400">Install the tracking script to start seeing visitor data</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Campaigns Tab */}
+        {activeTab === 'campaigns' && (
+          <>
+            {stats?.campaigns && stats.campaigns.length > 0 ? (
+              <div className="space-y-4">
+                {stats.campaigns.map((campaign) => (
+                  <div key={campaign.id} className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-orange-500/50 transition">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-bold text-lg">{campaign.email?.subject || 'Email Campaign'}</h3>
+                          <p className="text-gray-400 text-sm">
+                            To: <span className="text-orange-300 font-medium">{campaign.visitor_email}</span>
+                            {campaign.visitor_name && <span className="text-gray-500"> ({campaign.visitor_name})</span>}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => sendEmail(campaign)}
+                        disabled={sendingEmail === campaign.id}
+                        className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold rounded-lg transition disabled:opacity-50"
+                      >
+                        {sendingEmail === campaign.id ? 'Sending...' : 'Send Email'}
+                      </button>
+                    </div>
+                    <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
+                      <div className="text-gray-300 text-sm whitespace-pre-wrap">
+                        {campaign.email?.body || 'Email content...'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-20 text-center">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-white font-bold text-lg mb-2">No Campaigns Yet</h3>
+                <p className="text-gray-400">AI campaigns will appear here as visitors are identified</p>
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {/* Visitor Profile Modal */}
+      {selectedVisitor && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setSelectedVisitor(null)}>
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-6 flex items-start justify-between z-10">
+              <div>
+                <h2 className="text-3xl font-black text-white mb-2">
+                  {selectedVisitor.name || selectedVisitor.email || 'Anonymous Visitor'}
+                </h2>
+                {selectedVisitor.email && (
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="text-blue-400">{selectedVisitor.email}</span>
+                    {selectedVisitor.phone && (
+                      <span className="text-purple-400">{selectedVisitor.phone}</span>
+                    )}
+                  </div>
+                )}
+                <p className="text-gray-500 text-xs font-mono mt-1">{selectedVisitor.id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedVisitor(null)}
+                className="text-gray-400 hover:text-white transition p-2"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Intent Analysis */}
+              <div className="mb-6">
+                <h3 className="text-white font-bold text-xl mb-4">🎯 User Intent Analysis</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {analyzeUserIntent(selectedVisitor).map((intent, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-lg p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">{intent.icon}</span>
+                          <span className="text-white font-bold">{intent.type}</span>
+                        </div>
+                        <div className="px-3 py-1 bg-blue-500/20 rounded-full">
+                          <span className="text-blue-400 font-bold text-sm">{intent.confidence}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Engagement Overview */}
+              <div className="mb-6">
+                <h3 className="text-white font-bold text-xl mb-4">📊 Engagement Overview</h3>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+                    <div className="text-gray-400 text-sm mb-2">Total Sessions</div>
+                    <div className="text-white font-black text-3xl">{selectedVisitor.total_sessions}</div>
+                  </div>
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+                    <div className="text-gray-400 text-sm mb-2">Total Events</div>
+                    <div className="text-white font-black text-3xl">{selectedVisitor.total_events}</div>
+                  </div>
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+                    <div className="text-gray-400 text-sm mb-2">Pages Viewed</div>
+                    <div className="text-white font-black text-3xl">{selectedVisitor.pages?.length || 0}</div>
+                  </div>
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+                    <div className="text-gray-400 text-sm mb-2">First Seen</div>
+                    <div className="text-white font-bold text-sm">{new Date(selectedVisitor.first_seen).toLocaleDateString()}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Session Timeline */}
+              <div className="mb-6">
+                <h3 className="text-white font-bold text-xl mb-4">📅 Session Timeline</h3>
+                {selectedVisitor.sessions && selectedVisitor.sessions.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedVisitor.sessions.map((session, idx) => (
+                      <div
+                        key={session.id || idx}
+                        className={`border rounded-lg p-4 cursor-pointer transition ${
+                          selectedSession?.id === session.id
+                            ? 'bg-blue-500/10 border-blue-500'
+                            : 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                        }`}
+                        onClick={() => setSelectedSession(session)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-white font-bold">
+                              Session {selectedVisitor.sessions.length - idx}
+                            </div>
+                            <div className="text-gray-400 text-sm">
+                              {new Date(session.start_time || session.first_seen).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-gray-400 text-sm">Duration</div>
+                            <div className="text-white font-bold">{session.duration || 0}s</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No session data available</p>
+                )}
+              </div>
+
+              {/* Selected Session Details */}
+              {selectedSession && (
+                <div className="mb-6">
+                  <h3 className="text-white font-bold text-xl mb-4">🔍 Session Details</h3>
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                      <div>
+                        <div className="text-gray-400 text-sm mb-1">Session Duration</div>
+                        <div className="text-pink-400 font-bold text-2xl">{selectedSession.duration || 0}s</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400 text-sm mb-1">Events</div>
+                        <div className="text-blue-400 font-bold text-2xl">{selectedSession.events?.length || 0}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400 text-sm mb-1">Started</div>
+                        <div className="text-white font-medium text-sm">
+                          {new Date(selectedSession.start_time || selectedSession.first_seen).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pages Visited */}
+              {selectedVisitor.pages && selectedVisitor.pages.length > 0 && (
+                <div>
+                  <h3 className="text-white font-bold text-xl mb-4">📄 Pages Visited</h3>
+                  <div className="space-y-4">
+                    {selectedVisitor.pages.map((page, idx) => (
+                      <div key={idx} className="bg-gray-900/50 border border-gray-700 rounded-lg p-5">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h4 className="text-white font-bold text-lg mb-1">
+                              {page.title || 'Untitled Page'}
+                            </h4>
+                            <p className="text-blue-400 text-sm mb-2 break-all">{page.url}</p>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="text-gray-400">
+                                Visited <span className="text-white font-bold">{page.visits}x</span>
+                              </span>
+                              <span className="text-gray-400">
+                                Time: <span className="text-pink-400 font-bold">{page.total_time}s</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Scroll Depth */}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-gray-400 text-sm">Scroll Depth</span>
+                            <span className="text-yellow-400 font-bold">{page.max_scroll}%</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-3">
+                            <div
+                              className="bg-gradient-to-r from-yellow-500 to-orange-500 h-full rounded-full transition-all"
+                              style={{ width: `${page.max_scroll}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Clicks */}
+                        {page.clicks && page.clicks.length > 0 && (
+                          <div>
+                            <div className="text-gray-400 text-sm mb-2">Clicks ({page.clicks.length})</div>
+                            <div className="flex flex-wrap gap-2">
+                              {page.clicks.slice(0, 5).map((click, cidx) => (
+                                <div key={cidx} className="px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded text-sm">
+                                  <span className="text-purple-300">
+                                    "{click.text?.substring(0, 40)}{click.text?.length > 40 ? '...' : ''}"
+                                  </span>
+                                </div>
+                              ))}
+                              {page.clicks.length > 5 && (
+                                <div className="px-3 py-1.5 bg-gray-700 rounded text-sm text-gray-400">
+                                  +{page.clicks.length - 5} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes slideIn {

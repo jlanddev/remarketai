@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import Anthropic from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
 
 // In-memory storage for demo (in production, use database)
 const events = [];
@@ -289,14 +294,14 @@ async function checkTriggers(visitor, session, event) {
   }
 }
 
-// Generate AI email and store campaign
+// Generate AI email using Claude and store campaign
 async function generateAndStoreCampaign(visitor, triggerType) {
   try {
     // Build detailed visitor profile for AI
     const visitorProfile = buildVisitorProfile(visitor);
 
-    // Generate personalized email (simulated AI for now)
-    const email = generatePersonalizedEmail(visitorProfile, triggerType);
+    // Use Claude AI to generate value-based, human email
+    const email = await generateClaudeEmail(visitorProfile, triggerType);
 
     // Store campaign
     const campaign = {
@@ -304,21 +309,38 @@ async function generateAndStoreCampaign(visitor, triggerType) {
       visitor_id: visitor.id,
       visitor_email: visitor.email,
       visitor_name: visitor.name,
+      client_id: visitor.client_id, // Add client_id for filtering
       trigger_type: triggerType,
       email,
       created_at: new Date().toISOString(),
-      status: 'generated', // In production: 'generated' -> 'sent' -> 'delivered'
+      status: 'generated',
       sent_at: null,
       opened_at: null,
       clicked_at: null
     };
 
     campaigns.push(campaign);
-    console.log(`✉️  Generated email for ${visitor.email}: "${email.subject}"`);
+    console.log(`✅ Claude generated email for ${visitor.email}: "${email.subject}"`);
 
     return campaign;
   } catch (error) {
-    console.error('Campaign generation error:', error);
+    console.error('❌ Campaign generation error:', error);
+
+    // Fallback to basic email if Claude fails
+    const email = generatePersonalizedEmail(visitorProfile, triggerType);
+    const campaign = {
+      id: `camp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      visitor_id: visitor.id,
+      visitor_email: visitor.email,
+      visitor_name: visitor.name,
+      client_id: visitor.client_id,
+      trigger_type: triggerType,
+      email,
+      created_at: new Date().toISOString(),
+      status: 'generated'
+    };
+    campaigns.push(campaign);
+    return campaign;
   }
 }
 
@@ -365,7 +387,142 @@ function buildVisitorProfile(visitor) {
   };
 }
 
-// Simulated AI email generation (in production, use Claude/OpenAI API)
+// Claude AI email generation - creates human, value-based emails
+async function generateClaudeEmail(visitor, triggerType) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.log('⚠️  No Claude API key - falling back to template emails');
+    return generatePersonalizedEmail(visitor, triggerType);
+  }
+
+  // Analyze visitor behavior to understand their journey
+  const pagesVisited = visitor.pages?.map(p => ({
+    title: p.title || 'Untitled',
+    url: p.url,
+    engaged: p.max_scroll > 50 || p.total_time > 30
+  })) || [];
+
+  const highValuePages = pagesVisited.filter(p =>
+    p.url.includes('pricing') ||
+    p.url.includes('contact') ||
+    p.url.includes('demo') ||
+    p.url.includes('features')
+  );
+
+  const returningVisitor = visitor.sessions?.size > 1;
+
+  // Determine campaign context
+  let campaignContext = '';
+  switch (triggerType) {
+    case 'high_engagement':
+      campaignContext = 'This visitor showed strong engagement. They\'re researching solutions and evaluating options.';
+      break;
+    case 'abandoned_page':
+      campaignContext = 'Visitor showed interest but left before taking action. They may have questions or concerns.';
+      break;
+    case 'returning_visitor':
+      campaignContext = 'Visitor came back multiple times. They\'re seriously considering this but may need a push.';
+      break;
+    case 'form_abandoned':
+      campaignContext = 'Visitor started a form but didn\'t complete it. Remove friction and make it easy to engage.';
+      break;
+    default:
+      campaignContext = 'Visitor showed interest in the product/service.';
+  }
+
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1200,
+      temperature: 0.9, // Higher creativity for more human emails
+      messages: [{
+        role: 'user',
+        content: `You are Jordan, a real human sales/marketing person at a company. Your job is to write SHORT, punchy, value-driven emails that get people to take action.
+
+VISITOR DATA:
+- Name: ${visitor.name || visitor.email?.split('@')[0] || 'there'}
+- Email: ${visitor.email}
+- Pages visited: ${pagesVisited.map(p => p.title).join(', ')}
+- High-value pages: ${highValuePages.length > 0 ? highValuePages.map(p => p.title).join(', ') : 'None'}
+- Returning visitor: ${returningVisitor ? 'Yes' : 'No'}
+
+CAMPAIGN CONTEXT: ${campaignContext}
+
+YOUR TASK:
+Write a SHORT (3-4 sentences max) email that:
+1. Sounds like it's from a REAL PERSON (use contractions, be casual, friendly)
+2. Focuses on THEIR PROBLEMS and VALUE (not what they did on the site)
+3. Creates urgency and drives ACTION (book a call, reply, etc.)
+4. NEVER mentions metrics (no "I saw you spent X seconds" or "you visited Y pages")
+5. Feels like a friendly human reaching out to help, not a sales robot
+
+CRITICAL RULES:
+- DO NOT say things like "I noticed you visited" or "I saw you were on our site"
+- DO NOT mention time spent, pages viewed, scroll depth, or any metrics
+- DO say things like "Hey, wanted to reach out..." or "Quick question..." or "Thought you might be interested..."
+- Keep it SHORT - 3-4 sentences MAX
+- Sign it "Jordan" (not "Jordan @ Company" or "The Team")
+- Make it feel like a text message from a friend, not a formal business email
+
+Good example:
+"Hey Sarah,
+
+Quick question - are you currently dealing with [problem]? I help companies like yours solve this with [solution].
+
+Worth a quick 10-minute call?
+
+Jordan"
+
+OUTPUT FORMAT (JSON only, no explanation):
+{
+  "subject": "short, punchy subject line",
+  "body": "the email body (3-4 sentences)",
+  "campaign_type": "demo_request|pricing|nurture|case_study"
+}`
+      }]
+    });
+
+    // Parse Claude's response
+    const responseText = message.content[0].text;
+    let emailData;
+
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        emailData = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('No JSON in response');
+      }
+    } catch (parseError) {
+      console.error('⚠️  Failed to parse Claude response, using fallback');
+      return generatePersonalizedEmail(visitor, triggerType);
+    }
+
+    console.log(`🤖 Claude generated ${emailData.campaign_type} email`);
+
+    return {
+      subject: emailData.subject,
+      body: emailData.body,
+      tone: 'human',
+      to: visitor.email,
+      from: 'Jordan @ Attrios',
+      generated_by: 'claude-ai',
+      generated_at: new Date().toISOString(),
+      personalization_data: {
+        pages_visited: pagesVisited.length,
+        high_value_pages: highValuePages.length,
+        returning_visitor: returningVisitor,
+        campaign_type: emailData.campaign_type,
+        trigger_type: triggerType
+      }
+    };
+
+  } catch (error) {
+    console.error('⚠️  Claude API error:', error.message);
+    return generatePersonalizedEmail(visitor, triggerType);
+  }
+}
+
+// Fallback email generation (used if Claude API fails)
 function generatePersonalizedEmail(visitor, triggerType) {
   const name = visitor.name || visitor.email?.split('@')[0] || 'there';
 
