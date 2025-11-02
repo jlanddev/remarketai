@@ -49,13 +49,20 @@ function hashPassword(password) {
 
 export async function POST(request) {
   try {
-    const { email, password, name, company } = await request.json();
+    const { email, password, name, company, website } = await request.json();
 
     // Validation
     if (!email || !password) {
       return NextResponse.json({
         success: false,
         error: 'Email and password required'
+      }, { status: 400 });
+    }
+
+    if (!website) {
+      return NextResponse.json({
+        success: false,
+        error: 'Website URL required for AI analysis'
       }, { status: 400 });
     }
 
@@ -85,6 +92,7 @@ export async function POST(request) {
       password: hashPassword(password),
       name: name || email.split('@')[0],
       company: company || '',
+      website: website,
       createdAt: new Date().toISOString(),
       apiKey: 'sk_' + Math.random().toString(36).substr(2, 32)
     };
@@ -93,6 +101,17 @@ export async function POST(request) {
     saveUsers(); // Persist to disk
 
     console.log(`✅ New user registered: ${email} (client_id: ${clientId})`);
+
+    // Trigger business analysis (async - don't wait for it)
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analyze-business`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientId,
+        websiteUrl: website,
+        companyName: company || name || email.split('@')[0]
+      })
+    }).catch(err => console.error('Business analysis failed:', err));
 
     // Create response with session cookie
     const response = NextResponse.json({

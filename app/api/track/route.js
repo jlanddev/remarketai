@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import fs from 'fs';
+import path from 'path';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
@@ -27,7 +29,9 @@ export async function POST(request) {
 
     // Update visitor profile
     const visitorId = data.visitor_id;
-    if (!visitors.has(visitorId)) {
+    const isNewVisitor = !visitors.has(visitorId);
+
+    if (isNewVisitor) {
       visitors.set(visitorId, {
         id: visitorId,
         first_seen: event.timestamp,
@@ -35,20 +39,32 @@ export async function POST(request) {
         sessions: new Set(),
         email: null,
         name: null,
-        phone: null
+        phone: null,
+        client_id: data.client_id
       });
     }
 
     const visitor = visitors.get(visitorId);
+
+    // Log new visitor to context
+    if (isNewVisitor && data.client_id) {
+      logVisitorActivity(data.client_id, visitor, event, 'new_visitor');
+    }
     visitor.events.push(event.id);
     visitor.sessions.add(data.session_id);
     visitor.last_seen = event.timestamp;
 
     // Capture user data if provided
+    const previousEmail = visitor.email;
     if (data.event_type === 'identify' && data.user_data) {
       visitor.email = data.user_data.email || visitor.email;
       visitor.name = data.user_data.name || visitor.name;
       visitor.phone = data.user_data.phone || visitor.phone;
+
+      // Log email capture to context
+      if (!previousEmail && visitor.email && data.client_id) {
+        logVisitorActivity(data.client_id, visitor, event, 'email_captured');
+      }
     }
 
     // Capture form data
@@ -56,6 +72,16 @@ export async function POST(request) {
       visitor.email = data.captured_data.email || visitor.email;
       visitor.name = data.captured_data.name || visitor.name;
       visitor.phone = data.captured_data.phone || visitor.phone;
+
+      // Log form submission to context
+      if (data.client_id) {
+        logVisitorActivity(data.client_id, visitor, event, 'form_submit');
+      }
+
+      // Also log email capture if this is first time getting email
+      if (!previousEmail && visitor.email && data.client_id) {
+        logVisitorActivity(data.client_id, visitor, event, 'email_captured');
+      }
     }
 
     // Update session
@@ -251,6 +277,12 @@ async function checkTriggers(visitor, session, event) {
 
     console.log(`🎯 TRIGGER: Abandoned page for ${visitor.email}`);
     firedTriggers.add(triggerKey('abandoned_page'));
+
+    // Log to context file
+    if (visitor.client_id) {
+      logVisitorActivity(visitor.client_id, visitor, event, 'abandoned_page');
+    }
+
     await generateAndStoreCampaign(visitor, 'abandoned_page');
   }
 
@@ -262,6 +294,12 @@ async function checkTriggers(visitor, session, event) {
 
     console.log(`🎯 TRIGGER: High engagement from ${visitor.email}`);
     firedTriggers.add(triggerKey('high_engagement'));
+
+    // Log to context file
+    if (visitor.client_id) {
+      logVisitorActivity(visitor.client_id, visitor, event, 'high_engagement');
+    }
+
     await generateAndStoreCampaign(visitor, 'high_engagement');
   }
 
@@ -271,6 +309,12 @@ async function checkTriggers(visitor, session, event) {
 
     console.log(`🎯 TRIGGER: Identify event - generating welcome campaign for ${visitor.email}`);
     firedTriggers.add(triggerKey('high_engagement'));
+
+    // Log to context file
+    if (visitor.client_id) {
+      logVisitorActivity(visitor.client_id, visitor, event, 'high_engagement');
+    }
+
     await generateAndStoreCampaign(visitor, 'high_engagement');
   }
 
@@ -280,6 +324,12 @@ async function checkTriggers(visitor, session, event) {
 
     console.log(`🎯 TRIGGER: Returning visitor ${visitor.email}`);
     firedTriggers.add(triggerKey('returning_visitor'));
+
+    // Log to context file
+    if (visitor.client_id) {
+      logVisitorActivity(visitor.client_id, visitor, event, 'returning_visitor');
+    }
+
     await generateAndStoreCampaign(visitor, 'returning_visitor');
   }
 
@@ -387,12 +437,167 @@ function buildVisitorProfile(visitor) {
   };
 }
 
+// Read client context file
+function readClientContext(clientId) {
+  if (!clientId) return null;
+
+  try {
+    const contextFile = path.join(process.cwd(), 'data', 'clients', clientId, 'context.md');
+    if (fs.existsSync(contextFile)) {
+      return fs.readFileSync(contextFile, 'utf-8');
+    }
+  } catch (error) {
+    console.error('Error reading context file:', error);
+  }
+  return null;
+}
+
+// Append campaign to context file
+function appendCampaignToContext(clientId, email, visitorEmail) {
+  if (!clientId) return;
+
+  try {
+    const contextFile = path.join(process.cwd(), 'data', 'clients', clientId, 'context.md');
+    if (!fs.existsSync(contextFile)) return;
+
+    const campaignEntry = `
+### Campaign - ${new Date().toISOString()}
+**To:** ${visitorEmail}
+**Subject:** ${email.subject}
+**Type:** ${email.personalization_data?.campaign_type || 'unknown'}
+
+\`\`\`
+${email.body}
+\`\`\`
+
+---
+`;
+
+    fs.appendFileSync(contextFile, campaignEntry);
+    console.log(`✅ Appended campaign to context for ${clientId}`);
+  } catch (error) {
+    console.error('Error appending campaign to context:', error);
+  }
+}
+
+// Log visitor activity to context file
+function logVisitorActivity(clientId, visitor, event, eventType) {
+  if (!clientId) return;
+
+  try {
+    const contextFile = path.join(process.cwd(), 'data', 'clients', clientId, 'context.md');
+    if (!fs.existsSync(contextFile)) return;
+
+    let activityLog = '';
+    const timestamp = new Date().toISOString();
+    const visitorName = visitor.email || visitor.id;
+
+    switch (eventType) {
+      case 'new_visitor':
+        activityLog = `
+### 🆕 New Visitor - ${timestamp}
+**Visitor:** ${visitorName}
+**Status:** New lead - just arrived
+**Sales Cycle Stage:** Awareness
+
+---
+`;
+        break;
+
+      case 'email_captured':
+        activityLog = `
+### ✉️ Email Captured - ${timestamp}
+**Visitor:** ${visitorName}
+**Email:** ${visitor.email}
+**Status:** Lead qualified - contact info obtained
+**Sales Cycle Stage:** Interest → Consideration
+
+---
+`;
+        break;
+
+      case 'high_engagement':
+        const pages = visitor.pages?.length || 0;
+        const topPages = visitor.pages?.slice(0, 3).map(p => p.title || p.url).join(', ') || 'unknown';
+        activityLog = `
+### 🔥 High Engagement Detected - ${timestamp}
+**Visitor:** ${visitorName}
+**Pages Viewed:** ${pages}
+**Focus Areas:** ${topPages}
+**Time on Site:** ${event.seconds || 'unknown'}s
+**Status:** Hot lead - actively researching
+**Sales Cycle Stage:** Consideration
+
+---
+`;
+        break;
+
+      case 'returning_visitor':
+        const sessionCount = visitor.sessions?.size || 0;
+        activityLog = `
+### 🔄 Returning Visitor - ${timestamp}
+**Visitor:** ${visitorName}
+**Total Sessions:** ${sessionCount}
+**Status:** Engaged lead - showing sustained interest
+**Sales Cycle Stage:** Evaluation → Decision
+**Action:** Consider personal outreach or demo offer
+
+---
+`;
+        break;
+
+      case 'form_submit':
+        const formData = event.captured_data || {};
+        activityLog = `
+### 📝 Form Submitted - ${timestamp}
+**Visitor:** ${visitorName}
+**Form Data:** ${JSON.stringify(formData, null, 2)}
+**Status:** Active lead - took action
+**Sales Cycle Stage:** Intent
+**Action:** Follow up within 24 hours
+
+---
+`;
+        break;
+
+      case 'abandoned_page':
+        const pageTitle = event.page?.title || 'Unknown page';
+        activityLog = `
+### ⚠️ Page Abandoned - ${timestamp}
+**Visitor:** ${visitorName}
+**Page:** ${pageTitle}
+**Time Spent:** ${event.seconds || 'unknown'}s
+**Scroll Depth:** ${event.depth || 'unknown'}%
+**Status:** Warm lead - showed interest but left
+**Sales Cycle Stage:** Consideration (stalled)
+**Action:** Send re-engagement email
+
+---
+`;
+        break;
+
+      default:
+        return; // Don't log unimportant events
+    }
+
+    if (activityLog) {
+      fs.appendFileSync(contextFile, activityLog);
+      console.log(`📝 Logged ${eventType} activity for ${clientId}`);
+    }
+  } catch (error) {
+    console.error('Error logging visitor activity:', error);
+  }
+}
+
 // Claude AI email generation - creates human, value-based emails
 async function generateClaudeEmail(visitor, triggerType) {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.log('⚠️  No Claude API key - falling back to template emails');
     return generatePersonalizedEmail(visitor, triggerType);
   }
+
+  // Read client context for business-specific information
+  const clientContext = readClientContext(visitor.client_id);
 
   // Analyze visitor behavior to understand their journey
   const pagesVisited = visitor.pages?.map(p => ({
@@ -438,7 +643,14 @@ async function generateClaudeEmail(visitor, triggerType) {
         role: 'user',
         content: `You are Jordan, a real human sales/marketing person at a company. Your job is to write SHORT, punchy, value-driven emails that get people to take action.
 
-VISITOR DATA:
+${clientContext ? `BUSINESS CONTEXT (READ THIS FIRST - This is YOUR business info and past campaigns):
+${clientContext}
+
+Use this context to understand the business, its tone, target audience, and past campaign history. Make sure your email fits the business style and doesn't repeat past campaigns.
+
+---
+
+` : ''}VISITOR DATA:
 - Name: ${visitor.name || visitor.email?.split('@')[0] || 'there'}
 - Email: ${visitor.email}
 - Pages visited: ${pagesVisited.map(p => p.title).join(', ')}
@@ -499,7 +711,7 @@ OUTPUT FORMAT (JSON only, no explanation):
 
     console.log(`🤖 Claude generated ${emailData.campaign_type} email`);
 
-    return {
+    const generatedEmail = {
       subject: emailData.subject,
       body: emailData.body,
       tone: 'human',
@@ -515,6 +727,11 @@ OUTPUT FORMAT (JSON only, no explanation):
         trigger_type: triggerType
       }
     };
+
+    // Append campaign to context file for memory
+    appendCampaignToContext(visitor.client_id, generatedEmail, visitor.email);
+
+    return generatedEmail;
 
   } catch (error) {
     console.error('⚠️  Claude API error:', error.message);

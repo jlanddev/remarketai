@@ -10,7 +10,8 @@ export default function SignupPage() {
     email: '',
     password: '',
     name: '',
-    company: ''
+    company: '',
+    website: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,7 +48,7 @@ export default function SignupPage() {
       <div className="max-w-md w-full">
         {/* Logo/Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">RemarketAI</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">attrios</h1>
           <p className="text-gray-600">AI-Powered Visitor Remarketing</p>
         </div>
 
@@ -115,6 +116,23 @@ export default function SignupPage() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Your Company Inc"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Website URL
+              </label>
+              <input
+                type="url"
+                required
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="https://yourcompany.com"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                AI will analyze your website to create personalized campaigns
+              </p>
             </div>
 
             <button
