@@ -95,7 +95,7 @@ async function saveAllData(events, visitors, sessions, campaigns, firedTriggers)
 async function enrichVisitorWithPDL(visitorId, ipAddress) {
   if (!process.env.PDL_API_KEY) {
     console.log('⚠️  No PDL API key - skipping enrichment');
-    return null;
+    return { status: 'no_api_key', data: null };
   }
 
   try {
@@ -114,7 +114,7 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
 
     if (!response.ok) {
       console.log(`⚠️  PDL API error: ${response.status}`);
-      return null;
+      return { status: 'error', statusCode: response.status, data: null };
     }
 
     const result = await response.json();
@@ -134,14 +134,14 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
       };
 
       console.log(`✅ PDL enriched: ${enrichedData.full_name || 'Unknown'} (${enrichedData.emails?.[0] || 'No email'})`);
-      return enrichedData;
+      return { status: 'match_found', data: enrichedData };
     }
 
     console.log('⚠️  PDL: No data found for this IP');
-    return null;
+    return { status: 'no_match', statusCode: result.status, data: null };
   } catch (error) {
     console.error('❌ PDL enrichment error:', error.message);
-    return null;
+    return { status: 'error', error: error.message, data: null };
   }
 }
 
@@ -182,29 +182,36 @@ export async function POST(request) {
         phone: null,
         client_id: data.client_id,
         ip_address: ipAddress,
-        pdl_enriched: false
+        pdl_status: 'pending',
+        pdl_attempted_at: new Date().toISOString()
       });
 
       // Enrich visitor with People Data Labs (async, don't wait)
-      enrichVisitorWithPDL(visitorId, ipAddress).then(enrichedData => {
-        if (enrichedData) {
-          const visitor = visitors.get(visitorId);
-          if (visitor) {
-            visitor.email = enrichedData.emails?.[0] || visitor.email;
-            visitor.name = enrichedData.full_name || visitor.name;
-            visitor.phone = enrichedData.phone_numbers?.[0] || visitor.phone;
-            visitor.job_title = enrichedData.job_title;
-            visitor.company = enrichedData.job_company_name;
-            visitor.linkedin = enrichedData.linkedin_url;
-            visitor.location = enrichedData.location_name;
-            visitor.pdl_enriched = true;
-            visitor.pdl_data = enrichedData;
+      enrichVisitorWithPDL(visitorId, ipAddress).then(async (result) => {
+        // Reload data to get latest state
+        const { events: latestEvents, visitors: latestVisitors, sessions: latestSessions, campaigns: latestCampaigns, firedTriggers: latestTriggers } = await loadAllData();
 
-            // Save updated visitor data
-            saveData();
+        const visitor = latestVisitors.get(visitorId);
+        if (visitor) {
+          visitor.pdl_status = result.status;
+          visitor.pdl_response_code = result.statusCode;
 
+          if (result.status === 'match_found' && result.data) {
+            visitor.email = result.data.emails?.[0] || visitor.email;
+            visitor.name = result.data.full_name || visitor.name;
+            visitor.phone = result.data.phone_numbers?.[0] || visitor.phone;
+            visitor.job_title = result.data.job_title;
+            visitor.company = result.data.job_company_name;
+            visitor.linkedin = result.data.linkedin_url;
+            visitor.location = result.data.location_name;
+            visitor.pdl_data = result.data;
             console.log(`✅ Visitor ${visitorId} enriched with PDL data`);
+          } else {
+            console.log(`ℹ️  Visitor ${visitorId} PDL status: ${result.status}`);
           }
+
+          // Save updated visitor data back to Netlify Blobs
+          await saveAllData(latestEvents, latestVisitors, latestSessions, latestCampaigns, latestTriggers);
         }
       }).catch(err => {
         console.error('PDL enrichment error:', err);
