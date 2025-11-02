@@ -1,5 +1,29 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getStore } from '@netlify/blobs';
+
+// Get users from Netlify Blobs
+async function getUsers() {
+  try {
+    const store = getStore('attrios-users');
+    const usersData = await store.get('all-users');
+
+    if (!usersData) {
+      return new Map();
+    }
+
+    const usersArray = JSON.parse(usersData);
+    const users = new Map();
+    usersArray.forEach(user => {
+      users.set(user.email, user);
+    });
+
+    return users;
+  } catch (error) {
+    console.error('Error loading users from Netlify Blobs:', error);
+    return new Map();
+  }
+}
 
 export async function GET(request) {
   // Get current user from cookie
@@ -21,18 +45,8 @@ export async function GET(request) {
     }, { status: 401 });
   }
 
-  // Get full user data
-  let users;
-  try {
-    const signupModule = await import('../auth/signup/route.js');
-    users = signupModule.users;
-  } catch {
-    return NextResponse.json({
-      success: false,
-      error: 'User data not available'
-    }, { status: 500 });
-  }
-
+  // Get full user data from Netlify Blobs
+  const users = await getUsers();
   const userData = users.get(user.email);
 
   if (!userData) {

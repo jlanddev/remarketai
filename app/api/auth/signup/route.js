@@ -146,6 +146,3 @@ export async function POST(request) {
     }, { status: 500 });
   }
 }
-
-// Export users map for other routes to access
-export { users };
