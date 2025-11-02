@@ -1,28 +1,72 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedVisitor, setSelectedVisitor] = useState(null);
   const [sendingEmail, setSendingEmail] = useState(null);
+  const [showTrackingScript, setShowTrackingScript] = useState(false);
 
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 3000);
-    return () => clearInterval(interval);
+    fetchUser();
   }, []);
 
-  async function fetchStats() {
+  useEffect(() => {
+    if (user) {
+      fetchStats();
+      const interval = setInterval(fetchStats, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  async function fetchUser() {
     try {
-      const response = await fetch('/api/track');
+      const response = await fetch('/api/user');
+      const data = await response.json();
+
+      if (!data.success) {
+        // Not authenticated, redirect to login
+        router.push('/login');
+        return;
+      }
+
+      setUser(data.user);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      router.push('/login');
+    }
+  }
+
+  async function fetchStats() {
+    if (!user) return;
+
+    try {
+      const response = await fetch(`/api/track?client_id=${user.clientId}`);
       const data = await response.json();
       setStats(data);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+    alert('✅ Copied to clipboard!');
   }
 
   async function sendEmail(campaign) {
@@ -70,26 +114,65 @@ export default function Dashboard() {
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-black text-white mb-1">
                 Remarket<span className="text-blue-500">AI</span> Intelligence
               </h1>
-              <p className="text-gray-400">Real-time visitor behavior and engagement analytics</p>
+              <p className="text-gray-400">
+                {user?.company || user?.name || user?.email}'s Dashboard
+              </p>
             </div>
             <div className="flex gap-3">
               <div className="flex items-center px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
                 <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
                 <span className="text-green-400 text-sm font-medium">LIVE</span>
               </div>
-              <a
-                href="/"
+              <button
+                onClick={() => setShowTrackingScript(!showTrackingScript)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+              >
+                📋 Get Tracking Code
+              </button>
+              <button
+                onClick={handleLogout}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition border border-gray-600"
               >
-                ← Home
-              </a>
+                Logout
+              </button>
             </div>
           </div>
+
+          {/* Tracking Script Panel */}
+          {showTrackingScript && user && (
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 mt-4">
+              <h3 className="text-white font-bold mb-4">📋 Your Tracking Script</h3>
+              <p className="text-gray-400 text-sm mb-4">
+                Add this script to your website's HTML (before closing {"</body>"} tag):
+              </p>
+              <div className="bg-black rounded-lg p-4 mb-4 font-mono text-sm relative">
+                <code className="text-green-400">
+                  {`<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://your-site.com'}/track.js?id=${user.clientId}"></script>`}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(`<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://your-site.com'}/track.js?id=${user.clientId}"></script>`)}
+                  className="absolute top-2 right-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500 mb-1">Client ID:</p>
+                  <code className="text-blue-400 font-mono">{user.clientId}</code>
+                </div>
+                <div>
+                  <p className="text-gray-500 mb-1">API Key:</p>
+                  <code className="text-purple-400 font-mono text-xs">{user.apiKey}</code>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -101,10 +101,34 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
+  // Get client_id from query params (for user-specific dashboards)
+  const { searchParams } = new URL(request.url);
+  const clientIdFilter = searchParams.get('client_id');
+
+  // Filter events by client_id if provided
+  const filteredEvents = clientIdFilter
+    ? events.filter(e => e.client_id === clientIdFilter)
+    : events;
+
+  // Filter visitors by client_id
+  const filteredVisitors = clientIdFilter
+    ? new Map(Array.from(visitors.entries()).filter(([_, v]) => v.client_id === clientIdFilter))
+    : visitors;
+
+  // Filter sessions by client_id
+  const filteredSessions = clientIdFilter
+    ? new Map(Array.from(sessions.entries()).filter(([_, s]) => s.client_id === clientIdFilter))
+    : sessions;
+
+  // Filter campaigns by client_id
+  const filteredCampaigns = clientIdFilter
+    ? campaigns.filter(c => c.client_id === clientIdFilter)
+    : campaigns;
+
   // Build detailed visitor profiles
-  const detailedVisitors = Array.from(visitors.values()).map(visitor => {
-    const visitorEvents = events.filter(e => e.visitor_id === visitor.id);
-    const visitorSessions = Array.from(sessions.values()).filter(s => s.visitor_id === visitor.id);
+  const detailedVisitors = Array.from(filteredVisitors.values()).map(visitor => {
+    const visitorEvents = filteredEvents.filter(e => e.visitor_id === visitor.id);
+    const visitorSessions = Array.from(filteredSessions.values()).filter(s => s.visitor_id === visitor.id);
 
     // Aggregate page data
     const pageData = {};
@@ -149,12 +173,12 @@ export async function GET(request) {
 
   // Enhanced stats
   const stats = {
-    total_events: events.length,
-    total_visitors: visitors.size,
-    total_sessions: sessions.size,
-    visitors_with_email: Array.from(visitors.values()).filter(v => v.email).length,
-    total_campaigns: campaigns.length,
-    recent_events: events.slice(-20).reverse().map(event => {
+    total_events: filteredEvents.length,
+    total_visitors: filteredVisitors.size,
+    total_sessions: filteredSessions.size,
+    visitors_with_email: Array.from(filteredVisitors.values()).filter(v => v.email).length,
+    total_campaigns: filteredCampaigns.length,
+    recent_events: filteredEvents.slice(-20).reverse().map(event => {
       // Enrich events with more context
       return {
         ...event,
@@ -166,8 +190,8 @@ export async function GET(request) {
       };
     }),
     detailed_visitors: detailedVisitors,
-    active_pages: getActivePages(events),
-    campaigns: campaigns.slice(-10).reverse() // Last 10 campaigns
+    active_pages: getActivePages(filteredEvents),
+    campaigns: filteredCampaigns.slice(-10).reverse() // Last 10 campaigns
   };
 
   return NextResponse.json(stats);
