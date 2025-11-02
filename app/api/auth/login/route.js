@@ -1,12 +1,26 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
-// Import users from signup route
-let users;
-try {
-  const signupModule = await import('../signup/route.js');
-  users = signupModule.users;
-} catch {
-  users = new Map();
+// Persistent storage file
+const DATA_FILE = path.join(process.cwd(), 'data', 'users.json');
+
+// Load users from file
+function loadUsers() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = fs.readFileSync(DATA_FILE, 'utf-8');
+      const usersArray = JSON.parse(data);
+      const users = new Map();
+      usersArray.forEach(user => {
+        users.set(user.email, user);
+      });
+      return users;
+    }
+  } catch (error) {
+    console.error('Error loading users:', error);
+  }
+  return new Map();
 }
 
 // Simple password hashing (must match signup)
@@ -25,6 +39,9 @@ export async function POST(request) {
         error: 'Email and password required'
       }, { status: 400 });
     }
+
+    // Load users from disk
+    const users = loadUsers();
 
     // Find user
     const user = users.get(email);
