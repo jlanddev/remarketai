@@ -999,6 +999,124 @@ export default function Dashboard() {
             </div>
 
             <div className="p-6">
+              {/* PDL Enrichment Section */}
+              <div className="mb-6">
+                <h3 className="text-white font-bold text-xl mb-4">🔍 People Data Labs Enrichment</h3>
+                <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
+                  {selectedVisitor.pdl_status ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <div className="text-gray-400 text-sm mb-1">PDL Status</div>
+                          <span className={`inline-block px-3 py-1 rounded text-sm font-bold ${
+                            selectedVisitor.pdl_status === 'match_found' ? 'bg-green-500/10 border border-green-500/20 text-green-400' :
+                            selectedVisitor.pdl_status === 'no_match' ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400' :
+                            selectedVisitor.pdl_status === 'pending' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400' :
+                            selectedVisitor.pdl_status === 'error' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
+                            'bg-gray-500/10 border border-gray-500/20 text-gray-400'
+                          }`}>
+                            {selectedVisitor.pdl_status === 'match_found' ? '✓ Match Found' :
+                             selectedVisitor.pdl_status === 'no_match' ? '✗ No Match' :
+                             selectedVisitor.pdl_status === 'pending' ? '⏳ Pending' :
+                             selectedVisitor.pdl_status === 'error' ? '⚠ Error' :
+                             selectedVisitor.pdl_status === 'no_api_key' ? 'No API Key' :
+                             selectedVisitor.pdl_status}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-gray-400 text-sm mb-1">Attempted At</div>
+                          <div className="text-white font-mono text-sm">
+                            {selectedVisitor.pdl_attempted_at ? new Date(selectedVisitor.pdl_attempted_at).toLocaleString() : 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {selectedVisitor.pdl_status === 'match_found' && selectedVisitor.pdl_data && (
+                        <div className="border-t border-gray-700 pt-4 mt-4">
+                          <div className="text-green-400 font-bold mb-3">✅ Enriched Data from PDL:</div>
+                          <div className="grid grid-cols-2 gap-4">
+                            {selectedVisitor.pdl_data.full_name && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Full Name</div>
+                                <div className="text-white font-bold">{selectedVisitor.pdl_data.full_name}</div>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.emails && selectedVisitor.pdl_data.emails.length > 0 && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Emails</div>
+                                <div className="text-blue-400 font-mono text-sm">
+                                  {selectedVisitor.pdl_data.emails.slice(0, 2).join(', ')}
+                                </div>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.phone_numbers && selectedVisitor.pdl_data.phone_numbers.length > 0 && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Phone Numbers</div>
+                                <div className="text-purple-400 font-mono text-sm">
+                                  {selectedVisitor.pdl_data.phone_numbers.slice(0, 2).join(', ')}
+                                </div>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.job_title && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Job Title</div>
+                                <div className="text-white">{selectedVisitor.pdl_data.job_title}</div>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.job_company_name && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Company</div>
+                                <div className="text-white">{selectedVisitor.pdl_data.job_company_name}</div>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.location_name && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Location</div>
+                                <div className="text-white">{selectedVisitor.pdl_data.location_name}</div>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.linkedin_url && (
+                              <div className="col-span-2">
+                                <div className="text-gray-400 text-xs mb-1">LinkedIn</div>
+                                <a href={selectedVisitor.pdl_data.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm break-all">
+                                  {selectedVisitor.pdl_data.linkedin_url}
+                                </a>
+                              </div>
+                            )}
+                            {selectedVisitor.pdl_data.likelihood && (
+                              <div>
+                                <div className="text-gray-400 text-xs mb-1">Match Likelihood</div>
+                                <div className="text-green-400 font-bold">{selectedVisitor.pdl_data.likelihood}/10</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedVisitor.pdl_status === 'no_match' && (
+                        <div className="border-t border-gray-700 pt-4 mt-4">
+                          <div className="text-yellow-400 text-sm">
+                            ℹ️ PDL was called but no person data found for IP: {selectedVisitor.ip_address || 'Unknown'}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedVisitor.pdl_status === 'error' && (
+                        <div className="border-t border-gray-700 pt-4 mt-4">
+                          <div className="text-red-400 text-sm">
+                            ⚠️ PDL API returned an error (Status: {selectedVisitor.pdl_response_code || 'Unknown'})
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-gray-500 text-center py-4">
+                      PDL enrichment not attempted for this visitor (tracked before PDL integration)
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Intent Analysis */}
               <div className="mb-6">
                 <h3 className="text-white font-bold text-xl mb-4">🎯 User Intent Analysis</h3>
