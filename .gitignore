@@ -31,3 +31,6 @@ yarn-error.log*
 
 # Turbopack
 .turbopack
+
+# User data (contains passwords)
+/data/

@@ -1,7 +1,45 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
-// In-memory user storage (upgrade to database in production)
+// Persistent storage file
+const DATA_FILE = path.join(process.cwd(), 'data', 'users.json');
+
+// In-memory user storage (synced with file)
 const users = new Map();
+
+// Load users from file on startup
+function loadUsers() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = fs.readFileSync(DATA_FILE, 'utf-8');
+      const usersArray = JSON.parse(data);
+      usersArray.forEach(user => {
+        users.set(user.email, user);
+      });
+      console.log(`✅ Loaded ${users.size} users from disk`);
+    }
+  } catch (error) {
+    console.error('Error loading users:', error);
+  }
+}
+
+// Save users to file
+function saveUsers() {
+  try {
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const usersArray = Array.from(users.values());
+    fs.writeFileSync(DATA_FILE, JSON.stringify(usersArray, null, 2));
+  } catch (error) {
+    console.error('Error saving users:', error);
+  }
+}
+
+// Load users on module import
+loadUsers();
 
 // Simple password hashing (use bcrypt in production)
 function hashPassword(password) {
@@ -52,6 +90,7 @@ export async function POST(request) {
     };
 
     users.set(email, user);
+    saveUsers(); // Persist to disk
 
     console.log(`✅ New user registered: ${email} (client_id: ${clientId})`);
 
