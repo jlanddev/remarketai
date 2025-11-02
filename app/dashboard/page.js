@@ -201,26 +201,19 @@ export default function Dashboard() {
               </p>
               <div className="bg-black rounded-lg p-4 mb-4 font-mono text-sm relative">
                 <code className="text-green-400 whitespace-pre-wrap break-all">
-                  {`<script src="${typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
-                    ? window.location.origin
-                    : 'https://YOUR-SITE.netlify.app'}/track.js?id=${user.clientId}"></script>`}
+                  {typeof window !== 'undefined'
+                    ? `<script src="${window.location.origin}/track.js?id=${user.clientId}"></script>`
+                    : `<script src="/track.js?id=${user.clientId}"></script>`}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(`<script src="${typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
-                    ? window.location.origin
-                    : 'https://YOUR-SITE.netlify.app'}/track.js?id=${user.clientId}"></script>`)}
+                  onClick={() => copyToClipboard(typeof window !== 'undefined'
+                    ? `<script src="${window.location.origin}/track.js?id=${user.clientId}"></script>`
+                    : `<script src="/track.js?id=${user.clientId}"></script>`)}
                   className="absolute top-2 right-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
                 >
                   Copy
                 </button>
               </div>
-              {typeof window !== 'undefined' && window.location.hostname.includes('localhost') && (
-                <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600/50 rounded-lg text-sm">
-                  <p className="text-yellow-400">
-                    ⚠️ Replace <code className="bg-black px-2 py-1 rounded">YOUR-SITE.netlify.app</code> with your actual Netlify URL
-                  </p>
-                </div>
-              )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-gray-500 mb-1">Your Client ID:</p>
@@ -635,15 +628,10 @@ export default function Dashboard() {
                 <h3 className="text-white font-bold text-lg mb-2">No Events Yet</h3>
                 <p className="text-gray-400 mb-4">Waiting for tracking data...</p>
                 <code className="inline-block px-4 py-2 bg-black border border-gray-700 rounded text-xs text-green-400 font-mono">
-                  {`<script src="${typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
-                    ? window.location.origin
-                    : 'https://YOUR-SITE.netlify.app'}/track.js?id=${user?.clientId || 'your-client-id'}"></script>`}
+                  {typeof window !== 'undefined'
+                    ? `<script src="${window.location.origin}/track.js?id=${user?.clientId || 'your-client-id'}"></script>`
+                    : `<script src="/track.js?id=${user?.clientId || 'your-client-id'}"></script>`}
                 </code>
-                {typeof window !== 'undefined' && window.location.hostname.includes('localhost') && (
-                  <p className="text-yellow-400 text-xs mt-2">
-                    ⚠️ Replace YOUR-SITE.netlify.app with your actual domain
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -746,10 +734,14 @@ export default function Dashboard() {
               </p>
               <div className="flex gap-3">
                 <code className="flex-1 p-4 bg-black rounded border border-gray-700 text-sm text-green-400 font-mono overflow-x-auto">
-                  {`<script src="http://localhost:3003/track.js?id=demo"></script>`}
+                  {typeof window !== 'undefined'
+                    ? `<script src="${window.location.origin}/track.js?id=${user?.clientId || 'demo'}"></script>`
+                    : `<script src="/track.js?id=${user?.clientId || 'demo'}"></script>`}
                 </code>
                 <button
-                  onClick={() => navigator.clipboard.writeText('<script src="http://localhost:3003/track.js?id=demo"></script>')}
+                  onClick={() => navigator.clipboard.writeText(typeof window !== 'undefined'
+                    ? `<script src="${window.location.origin}/track.js?id=${user?.clientId || 'demo'}"></script>`
+                    : `<script src="/track.js?id=${user?.clientId || 'demo'}"></script>`)}
                   className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition border border-gray-600"
                 >
                   Copy
