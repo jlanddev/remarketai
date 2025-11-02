@@ -783,13 +783,32 @@ export default function Dashboard() {
                         <div className="flex items-start justify-between mb-4">
                           {/* Visitor Info */}
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
                               <h3 className="text-white font-bold text-xl">
                                 {visitor.name || visitor.email || `Anonymous Visitor`}
                               </h3>
                               {visitor.email && (
                                 <span className="px-2 py-1 bg-green-500/10 border border-green-500/20 rounded text-xs text-green-400 font-bold">
                                   ✓ IDENTIFIED
+                                </span>
+                              )}
+                              {/* PDL Status Badge */}
+                              {visitor.pdl_status && (
+                                <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                  visitor.pdl_status === 'match_found' ? 'bg-green-500/10 border border-green-500/20 text-green-400' :
+                                  visitor.pdl_status === 'no_match' ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400' :
+                                  visitor.pdl_status === 'pending' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400' :
+                                  visitor.pdl_status === 'error' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
+                                  'bg-gray-500/10 border border-gray-500/20 text-gray-400'
+                                }`}>
+                                  PDL: {
+                                    visitor.pdl_status === 'match_found' ? '✓ Match' :
+                                    visitor.pdl_status === 'no_match' ? '✗ No Match' :
+                                    visitor.pdl_status === 'pending' ? '⏳ Pending' :
+                                    visitor.pdl_status === 'error' ? '⚠ Error' :
+                                    visitor.pdl_status === 'no_api_key' ? 'No Key' :
+                                    visitor.pdl_status
+                                  }
                                 </span>
                               )}
                             </div>
@@ -930,9 +949,30 @@ export default function Dashboard() {
             {/* Header */}
             <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-6 flex items-start justify-between z-10">
               <div>
-                <h2 className="text-3xl font-black text-white mb-2">
-                  {selectedVisitor.name || selectedVisitor.email || 'Anonymous Visitor'}
-                </h2>
+                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                  <h2 className="text-3xl font-black text-white">
+                    {selectedVisitor.name || selectedVisitor.email || 'Anonymous Visitor'}
+                  </h2>
+                  {/* PDL Status Badge */}
+                  {selectedVisitor.pdl_status && (
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${
+                      selectedVisitor.pdl_status === 'match_found' ? 'bg-green-500/10 border border-green-500/20 text-green-400' :
+                      selectedVisitor.pdl_status === 'no_match' ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400' :
+                      selectedVisitor.pdl_status === 'pending' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400' :
+                      selectedVisitor.pdl_status === 'error' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
+                      'bg-gray-500/10 border border-gray-500/20 text-gray-400'
+                    }`}>
+                      PDL: {
+                        selectedVisitor.pdl_status === 'match_found' ? '✓ Match Found' :
+                        selectedVisitor.pdl_status === 'no_match' ? '✗ No Match' :
+                        selectedVisitor.pdl_status === 'pending' ? '⏳ Pending' :
+                        selectedVisitor.pdl_status === 'error' ? '⚠ Error' :
+                        selectedVisitor.pdl_status === 'no_api_key' ? 'No API Key' :
+                        selectedVisitor.pdl_status
+                      }
+                    </span>
+                  )}
+                </div>
                 {selectedVisitor.email && (
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-blue-400">{selectedVisitor.email}</span>
@@ -940,6 +980,11 @@ export default function Dashboard() {
                       <span className="text-purple-400">{selectedVisitor.phone}</span>
                     )}
                   </div>
+                )}
+                {selectedVisitor.pdl_attempted_at && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    PDL attempted: {new Date(selectedVisitor.pdl_attempted_at).toLocaleString()}
+                  </p>
                 )}
                 <p className="text-gray-500 text-xs font-mono mt-1">{selectedVisitor.id}</p>
               </div>
