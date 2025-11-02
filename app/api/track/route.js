@@ -91,7 +91,7 @@ async function saveAllData(events, visitors, sessions, campaigns, firedTriggers)
   }
 }
 
-// Enrich visitor with People Data Labs
+// Enrich visitor with People Data Labs - IP Enrichment API
 async function enrichVisitorWithPDL(visitorId, ipAddress) {
   if (!process.env.PDL_API_KEY) {
     console.log('⚠️  No PDL API key - skipping enrichment');
@@ -99,22 +99,21 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
   }
 
   try {
-    console.log(`🔍 Enriching visitor ${visitorId} with PDL (IP: ${ipAddress})`);
+    console.log(`🔍 Enriching visitor ${visitorId} with PDL IP Enrichment (IP: ${ipAddress})`);
 
-    // Use PDL Person Search API with IP parameter
-    const response = await fetch('https://api.peopledatalabs.com/v5/person/search', {
-      method: 'POST',
+    // Use PDL IP Enrichment API - identifies companies from business IPs
+    const response = await fetch(`https://api.peopledatalabs.com/v5/ip/enrich?ip=${encodeURIComponent(ipAddress)}`, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
         'X-Api-Key': process.env.PDL_API_KEY
-      },
-      body: JSON.stringify({
-        query: {
-          ip_address: ipAddress
-        },
-        size: 1
-      })
+      }
     });
+
+    if (response.status === 404) {
+      // No company found - likely a residential/consumer IP
+      console.log(`ℹ️  PDL: No company found for IP ${ipAddress} (likely residential)`);
+      return { status: 'no_match', statusCode: 404, data: null };
+    }
 
     if (!response.ok) {
       console.log(`⚠️  PDL API error: ${response.status}`);
@@ -123,30 +122,47 @@ async function enrichVisitorWithPDL(visitorId, ipAddress) {
 
     const result = await response.json();
 
-    // Search API returns data in result.data array
-    if (result.status === 200 && result.data && result.data.length > 0) {
-      const person = result.data[0]; // Get first match
+    // Extract company and person data from IP enrichment
+    if (result.status === 200 && result.data) {
+      const data = result.data;
+      const company = data.company || {};
+      const person = data.person || null;
+
       const enrichedData = {
-        full_name: person.full_name,
-        first_name: person.first_name,
-        last_name: person.last_name,
-        emails: person.emails || [],
-        phone_numbers: person.phone_numbers || [],
-        mobile_phone: person.mobile_phone,
-        job_title: person.job_title,
-        job_company_name: person.job_company_name,
-        linkedin_url: person.linkedin_url,
-        location_name: person.location_name,
-        pdl_id: person.id,
-        likelihood: person.likelihood || 0
+        // Company info from IP
+        company_name: company.name || null,
+        company_website: company.website || null,
+        company_industry: company.industry || null,
+        company_size: company.size || null,
+        company_location: company.location || null,
+
+        // Person info if available (PDL sometimes includes likely person)
+        full_name: person?.full_name || null,
+        first_name: person?.first_name || null,
+        last_name: person?.last_name || null,
+        emails: person?.emails || [],
+        phone_numbers: person?.phone_numbers || [],
+        job_title: person?.job_title || null,
+        linkedin_url: person?.linkedin_url || null,
+
+        // IP metadata
+        ip_location: data.ip?.location || null,
+        ip_type: data.ip?.type || null, // business, residential, mobile, etc
+
+        pdl_id: person?.id || null
       };
 
-      console.log(`✅ PDL enriched: ${enrichedData.full_name || 'Unknown'} (${enrichedData.emails?.[0] || 'No email'}) - Likelihood: ${enrichedData.likelihood}`);
-      return { status: 'match_found', data: enrichedData };
+      const hasPersonData = person && person.full_name;
+      console.log(`✅ PDL enriched IP ${ipAddress}: Company=${company.name || 'None'}, Person=${hasPersonData ? person.full_name : 'None'}`);
+
+      return {
+        status: hasPersonData ? 'match_found' : 'company_only',
+        data: enrichedData
+      };
     }
 
-    console.log('⚠️  PDL: No data found for this IP');
-    return { status: 'no_match', statusCode: result.status, data: null };
+    console.log('⚠️  PDL: Unexpected response format');
+    return { status: 'no_match', statusCode: response.status, data: null };
   } catch (error) {
     console.error('❌ PDL enrichment error:', error.message);
     return { status: 'error', error: error.message, data: null };
@@ -204,16 +220,25 @@ export async function POST(request) {
           visitor.pdl_status = result.status;
           visitor.pdl_response_code = result.statusCode;
 
-          if (result.status === 'match_found' && result.data) {
-            visitor.email = result.data.emails?.[0] || visitor.email;
-            visitor.name = result.data.full_name || visitor.name;
-            visitor.phone = result.data.phone_numbers?.[0] || visitor.phone;
-            visitor.job_title = result.data.job_title;
-            visitor.company = result.data.job_company_name;
-            visitor.linkedin = result.data.linkedin_url;
-            visitor.location = result.data.location_name;
+          if ((result.status === 'match_found' || result.status === 'company_only') && result.data) {
+            // Person data
+            if (result.data.full_name) {
+              visitor.email = result.data.emails?.[0] || visitor.email;
+              visitor.name = result.data.full_name || visitor.name;
+              visitor.phone = result.data.phone_numbers?.[0] || visitor.phone;
+              visitor.job_title = result.data.job_title;
+              visitor.linkedin = result.data.linkedin_url;
+            }
+
+            // Company data
+            if (result.data.company_name) {
+              visitor.company = result.data.company_name;
+              visitor.company_website = result.data.company_website;
+              visitor.company_industry = result.data.company_industry;
+            }
+
             visitor.pdl_data = result.data;
-            console.log(`✅ Visitor ${visitorId} enriched with PDL data`);
+            console.log(`✅ Visitor ${visitorId} enriched with PDL data (${result.status})`);
           } else {
             console.log(`ℹ️  Visitor ${visitorId} PDL status: ${result.status}`);
           }
