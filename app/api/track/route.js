@@ -272,6 +272,7 @@ export async function POST(request) {
       sessions.set(sessionId, {
         id: sessionId,
         visitor_id: visitorId,
+        client_id: data.client_id, // Add client_id for filtering
         started: event.timestamp,
         events: [],
         pages_viewed: new Set(),
