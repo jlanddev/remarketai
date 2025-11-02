@@ -7,12 +7,116 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-// In-memory storage for demo (in production, use database)
-const events = [];
-const visitors = new Map();
-const sessions = new Map();
-const campaigns = []; // Store AI-generated emails
-const firedTriggers = new Set(); // Track which triggers already fired
+// Persistent storage files
+const DATA_DIR = path.join(process.cwd(), 'data');
+const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
+const VISITORS_FILE = path.join(DATA_DIR, 'visitors.json');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+const CAMPAIGNS_FILE = path.join(DATA_DIR, 'campaigns.json');
+const TRIGGERS_FILE = path.join(DATA_DIR, 'triggers.json');
+
+// In-memory storage (synced with disk)
+let events = [];
+let visitors = new Map();
+let sessions = new Map();
+let campaigns = [];
+let firedTriggers = new Set();
+
+// Load data from disk on startup
+function loadData() {
+  try {
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    // Load events
+    if (fs.existsSync(EVENTS_FILE)) {
+      const eventsData = fs.readFileSync(EVENTS_FILE, 'utf-8');
+      events = JSON.parse(eventsData);
+      console.log(`✅ Loaded ${events.length} events from disk`);
+    }
+
+    // Load visitors
+    if (fs.existsSync(VISITORS_FILE)) {
+      const visitorsData = fs.readFileSync(VISITORS_FILE, 'utf-8');
+      const visitorsArray = JSON.parse(visitorsData);
+      visitors = new Map(visitorsArray.map(v => [v.id, {
+        ...v,
+        sessions: new Set(v.sessions)
+      }]));
+      console.log(`✅ Loaded ${visitors.size} visitors from disk`);
+    }
+
+    // Load sessions
+    if (fs.existsSync(SESSIONS_FILE)) {
+      const sessionsData = fs.readFileSync(SESSIONS_FILE, 'utf-8');
+      const sessionsArray = JSON.parse(sessionsData);
+      sessions = new Map(sessionsArray.map(s => [s.id, {
+        ...s,
+        pages_viewed: new Set(s.pages_viewed)
+      }]));
+      console.log(`✅ Loaded ${sessions.size} sessions from disk`);
+    }
+
+    // Load campaigns
+    if (fs.existsSync(CAMPAIGNS_FILE)) {
+      const campaignsData = fs.readFileSync(CAMPAIGNS_FILE, 'utf-8');
+      campaigns = JSON.parse(campaignsData);
+      console.log(`✅ Loaded ${campaigns.length} campaigns from disk`);
+    }
+
+    // Load triggered flags
+    if (fs.existsSync(TRIGGERS_FILE)) {
+      const triggersData = fs.readFileSync(TRIGGERS_FILE, 'utf-8');
+      firedTriggers = new Set(JSON.parse(triggersData));
+      console.log(`✅ Loaded ${firedTriggers.size} fired triggers from disk`);
+    }
+
+    console.log('🚀 All tracking data loaded successfully');
+  } catch (error) {
+    console.error('❌ Error loading tracking data:', error);
+  }
+}
+
+// Save data to disk
+function saveData() {
+  try {
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    // Save events
+    fs.writeFileSync(EVENTS_FILE, JSON.stringify(events, null, 2));
+
+    // Save visitors (convert Set to Array for JSON)
+    const visitorsArray = Array.from(visitors.values()).map(v => ({
+      ...v,
+      sessions: Array.from(v.sessions)
+    }));
+    fs.writeFileSync(VISITORS_FILE, JSON.stringify(visitorsArray, null, 2));
+
+    // Save sessions (convert Set to Array for JSON)
+    const sessionsArray = Array.from(sessions.values()).map(s => ({
+      ...s,
+      pages_viewed: Array.from(s.pages_viewed)
+    }));
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessionsArray, null, 2));
+
+    // Save campaigns
+    fs.writeFileSync(CAMPAIGNS_FILE, JSON.stringify(campaigns, null, 2));
+
+    // Save triggers
+    fs.writeFileSync(TRIGGERS_FILE, JSON.stringify(Array.from(firedTriggers), null, 2));
+
+  } catch (error) {
+    console.error('❌ Error saving tracking data:', error);
+  }
+}
+
+// Load data on module import
+loadData();
 
 export async function POST(request) {
   try {
@@ -116,6 +220,9 @@ export async function POST(request) {
 
     // Check for triggers (e.g., abandoned cart, high engagement, etc.)
     await checkTriggers(visitor, session, event);
+
+    // Save all data to disk after processing
+    saveData();
 
     return NextResponse.json({
       success: true,
@@ -372,6 +479,9 @@ async function generateAndStoreCampaign(visitor, triggerType) {
     campaigns.push(campaign);
     console.log(`✅ Claude generated email for ${visitor.email}: "${email.subject}"`);
 
+    // Save campaigns to disk
+    saveData();
+
     return campaign;
   } catch (error) {
     console.error('❌ Campaign generation error:', error);
@@ -390,6 +500,10 @@ async function generateAndStoreCampaign(visitor, triggerType) {
       status: 'generated'
     };
     campaigns.push(campaign);
+
+    // Save campaigns to disk
+    saveData();
+
     return campaign;
   }
 }
