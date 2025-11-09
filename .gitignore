@@ -34,3 +34,6 @@ yarn-error.log*
 
 # User data (contains passwords)
 /data/
+
+# Local Netlify folder
+.netlify

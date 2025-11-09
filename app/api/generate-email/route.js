@@ -31,90 +31,66 @@ function generatePersonalizedEmail(visitor, triggerType) {
   const mostViewedPage = visitor.pages?.sort((a, b) => b.visits - a.visits)[0];
   const clickedItems = visitor.pages?.flatMap(p => p.clicks || []).map(c => c.text).filter(Boolean) || [];
 
+  // Extract property-specific data
+  const propertyData = extractPropertyData(visitor);
+  const mainProperty = propertyData.length > 0 ? propertyData[0] : null;
+
   let subject = '';
   let body = '';
   let tone = 'professional';
 
-  // Different email templates based on trigger type
-  switch (triggerType) {
-    case 'abandoned_page':
-      subject = `${name}, still interested in ${mostViewedPage?.title || 'our offering'}?`;
-      body = `Hey ${name},
+  // Property-specific email templates
+  if (mainProperty) {
+    const propertyDetails = getPropertyDetails(mainProperty.name);
 
-I noticed you were checking out ${mostViewedPage?.title || 'our page'} earlier. You spent ${totalTime} seconds looking through it and ${avgScroll > 50 ? 'seemed pretty engaged' : 'started exploring'}.
+    subject = `${name} - ${mainProperty.name} ${mainProperty.imageClicks > 3 ? '(I saw you checking out the photos!)' : 'might be perfect for you'}`;
 
-${clickedItems.length > 0 ? `I saw you were particularly interested in "${clickedItems[0]}" - that's one of our most popular features.` : ''}
+    body = `Hi ${name},
 
-Was there something specific you wanted to know more about? I'm happy to answer any questions or set up a quick call.
+I noticed you spent time exploring ${mainProperty.name} on our website${mainProperty.imageClicks > 0 ? ` and clicked through ${mainProperty.imageClicks} property photos` : ''}. ${propertyDetails.hook}
 
-Best,
-Your Remarketing AI`;
-      tone = 'friendly';
-      break;
+${propertyDetails.highlights}
 
-    case 'high_engagement':
-      subject = `${name}, looks like you're interested - let's talk!`;
-      body = `Hi ${name},
+Based on what I saw during your visit:
+${mainProperty.imageClicks > 3 ? `• You viewed multiple property images - shows you're seriously visualizing this` : ''}
+${totalTime > 120 ? `• You spent ${Math.round(totalTime / 60)} minutes on site - that's real research` : ''}
+${avgScroll > 75 ? `• You scrolled through ${Math.round(avgScroll)}% of the content - thorough review` : ''}
+${visitor.total_sessions > 1 ? `• You've returned ${visitor.total_sessions} times - clear sign of interest` : ''}
 
-I noticed you spent ${totalTime} seconds exploring our site and checked out ${visitor.pages?.length || 0} different pages. That tells me you're seriously considering this.
+${propertyDetails.cta}
 
-You seemed most interested in:
-${visitor.pages?.slice(0, 3).map(p => `• ${p.title}`).join('\n') || '• Our offerings'}
+${propertyDetails.urgency}
 
-${avgScroll > 75 ? `You scrolled through everything - clearly doing your research.` : `You were digging into the details.`}
+Want to discuss ${mainProperty.name} specifically? I can answer questions about lot availability, pricing, financing options, or schedule a property tour.
 
-Want to hop on a quick 15-minute call? I can answer any questions and see if this is the right fit for you.
+Best regards,
+Haven Ground Team`;
 
-Let me know!
-Your Remarketing AI`;
-      tone = 'consultative';
-      break;
+    tone = 'sales-consultative';
 
-    case 'returning_visitor':
-      subject = `Welcome back, ${name}! Noticed you returned...`;
-      body = `Hey ${name},
+  } else {
+    // Generic remarketing email (no specific property viewed)
+    subject = `${name} - Finding your perfect land in Texas`;
+    body = `Hi ${name},
 
-Saw you came back to check us out again. That's a good sign!
+I saw you were exploring our available properties. We have some exceptional rural land opportunities across Texas that might interest you.
 
-Last time you were looking at ${mostViewedPage?.title || 'our offerings'}. This time you've been checking out ${visitor.pages?.[visitor.pages.length - 1]?.title || 'more details'}.
+Based on your browsing:
+• You viewed ${visitor.pages?.length || 0} pages on our site
+${avgScroll > 60 ? `• You thoroughly reviewed the content (${Math.round(avgScroll)}% scroll depth)` : ''}
+${visitor.total_sessions > 1 ? `• You've returned ${visitor.total_sessions} times - shows genuine interest` : ''}
 
-${clickedItems.length > 2 ? `I can tell you're really researching this - you've clicked on ${clickedItems.length} different things.` : ''}
+Our current featured properties include:
+• Oak Hill Reserve - Spacious 1-2 acre lots with Hill Country views
+• Willow Valley - Mountain acreage near Breckenridge, CO
+• DeSoto Estates - Prime development land with utilities
 
-Ready to move forward, or still have questions? Either way, I'm here to help.
+Each property offers something unique. Want to hop on a quick call to discuss what you're looking for? I can help match you with the perfect piece of land.
 
-Let's chat,
-Your Remarketing AI`;
-      tone = 'warm';
-      break;
+Best regards,
+Haven Ground Team`;
 
-    case 'form_abandoned':
-      subject = `${name}, did something go wrong with the form?`;
-      body = `Hi ${name},
-
-I noticed you started filling out our form but didn't finish. No worries - happens to everyone!
-
-${visitor.email ? `I have your email (${visitor.email}), so I wanted to reach out directly.` : ''}
-
-Was something confusing? Did you need more information first? Or maybe you just got busy?
-
-If you're still interested, I'd love to help you out. Just reply to this email or give me a call.
-
-Thanks,
-Your Remarketing AI`;
-      tone = 'helpful';
-      break;
-
-    default:
-      subject = `${name}, following up on your visit`;
-      body = `Hey ${name},
-
-Wanted to reach out after seeing you on our site. You checked out ${visitor.pages?.length || 1} pages and spent ${totalTime} seconds exploring.
-
-Is this something you're seriously considering? Happy to answer any questions or provide more details.
-
-Best,
-Your Remarketing AI`;
-      tone = 'professional';
+    tone = 'professional';
   }
 
   return {
@@ -129,9 +105,73 @@ Your Remarketing AI`;
       total_time: totalTime,
       avg_scroll: Math.round(avgScroll),
       pages_viewed: visitor.pages?.length || 0,
-      most_viewed_page: mostViewedPage?.title || 'Unknown',
-      clicked_items: clickedItems.slice(0, 3),
+      main_property: mainProperty?.name || 'None',
+      property_image_clicks: mainProperty?.imageClicks || 0,
       engagement_level: avgScroll > 75 ? 'high' : avgScroll > 50 ? 'medium' : 'low'
     }
+  };
+}
+
+// Extract which properties the visitor viewed
+function extractPropertyData(visitor) {
+  const propertyMap = {};
+
+  if (visitor.all_events) {
+    visitor.all_events.forEach(event => {
+      if (event.property_name && event.viewing_property) {
+        if (!propertyMap[event.property_name]) {
+          propertyMap[event.property_name] = {
+            name: event.property_name,
+            slug: event.property_slug,
+            views: 0,
+            imageClicks: 0
+          };
+        }
+
+        if (event.event_type === 'pageview') {
+          propertyMap[event.property_name].views++;
+        }
+
+        if (event.click_data?.image_clicked && event.click_data?.is_property_image) {
+          propertyMap[event.property_name].imageClicks++;
+        }
+      }
+    });
+  }
+
+  return Object.values(propertyMap).sort((a, b) =>
+    (b.views * 10 + b.imageClicks) - (a.views * 10 + a.imageClicks)
+  );
+}
+
+// Property-specific marketing copy
+function getPropertyDetails(propertyName) {
+  const properties = {
+    'Oak Hill': {
+      hook: "Oak Hill Reserve is one of our favorite projects - spacious 1-2 acre lots with stunning Texas Hill Country views.",
+      highlights: "What makes Oak Hill special:\n• Prime Hill Country location with panoramic views\n• 1-2 acre lots giving you room to breathe\n• Quick access to Austin while maintaining that rural feel\n• Utilities available (water, electric, high-speed internet)\n• Perfect for your dream home or weekend retreat",
+      cta: "The Hill Country market is hot right now, and these lots don't last long.",
+      urgency: "We currently have 8 lots available, but 3 are in active negotiations."
+    },
+    'Willow Valley': {
+      hook: "Willow Valley is absolutely stunning - mountain property just 2 miles from downtown Alma, Colorado and a short drive to Breckenridge.",
+      highlights: "What makes Willow Valley special:\n• 1+ acre mountain lots with lodgepole pine forest\n• Elevation living at its finest - fresh mountain air\n• Minutes from world-class skiing in Breckenridge\n• Utilities available (electric, natural gas, internet)\n• Year-round access maintained roads",
+      cta: "Mountain property near Breckenridge rarely stays on the market long.",
+      urgency: "Only 7 lots remaining in this phase."
+    },
+    'Desoto Estates': {
+      hook: "DeSoto Estates offers exceptional development potential in a growing area of North Texas.",
+      highlights: "What makes DeSoto Estates special:\n• Prime development land with utilities in place\n• Growing area with strong appreciation potential\n• Flexible zoning for residential or commercial\n• Easy access to major highways\n• Perfect for builders or land investors",
+      cta: "This is a rare opportunity for development-ready land in this market.",
+      urgency: "Interest has been high - several lots already under contract."
+    }
+  };
+
+  // Default template for unknown properties
+  return properties[propertyName] || {
+    hook: `${propertyName} caught your attention, and I can see why - it's one of our exceptional properties.`,
+    highlights: "This property offers:\n• Quality land at a competitive price\n• Great location and accessibility\n• Utilities available or nearby\n• Flexible terms and financing options",
+    cta: "Properties like this don't stay available for long in today's market.",
+    urgency: "Let's discuss this while it's still available."
   };
 }

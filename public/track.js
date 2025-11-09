@@ -52,8 +52,32 @@
     };
   }
 
+  // Parse property information from URL
+  function getPropertyInfo() {
+    const path = window.location.pathname;
+    const propertyMatch = path.match(/\/properties\/([^\/]+)/);
+
+    if (propertyMatch) {
+      const slug = propertyMatch[1];
+      // Convert slug to readable name (oak-hill -> Oak Hill)
+      const name = slug.split('-').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+
+      return {
+        property_slug: slug,
+        property_name: name,
+        viewing_property: true
+      };
+    }
+
+    return { viewing_property: false };
+  }
+
   // Send tracking event
   function track(eventType, data = {}) {
+    const propertyInfo = getPropertyInfo();
+
     const payload = {
       client_id: CLIENT_ID,
       visitor_id: getVisitorId(),
@@ -64,8 +88,10 @@
         url: window.location.href,
         title: document.title,
         referrer: document.referrer,
-        path: window.location.pathname
+        path: window.location.pathname,
+        clean_path: window.location.pathname.split('?')[0] // Remove query params for clean display
       },
+      ...propertyInfo,
       ...data
     };
 
@@ -91,6 +117,12 @@
   // Track clicks
   document.addEventListener('click', function(e) {
     const target = e.target;
+
+    // Check if clicking on an image or image container
+    const isImage = target.tagName === 'IMG' ||
+                   target.querySelector('img') ||
+                   (target.parentElement && target.parentElement.tagName === 'IMG');
+
     const data = {
       element: target.tagName,
       text: target.textContent.slice(0, 100),
@@ -98,6 +130,22 @@
       id: target.id || null,
       classes: target.className || null
     };
+
+    // If it's an image, capture the image src
+    if (isImage) {
+      let imgSrc = null;
+      if (target.tagName === 'IMG') {
+        imgSrc = target.src;
+      } else if (target.querySelector('img')) {
+        imgSrc = target.querySelector('img').src;
+      } else if (target.parentElement && target.parentElement.tagName === 'IMG') {
+        imgSrc = target.parentElement.src;
+      }
+
+      data.image_clicked = true;
+      data.image_src = imgSrc;
+      data.is_property_image = imgSrc && imgSrc.includes('/images/');
+    }
 
     track('click', { click_data: data });
   }, true);

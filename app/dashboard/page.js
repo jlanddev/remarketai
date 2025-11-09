@@ -68,7 +68,7 @@ export default function Dashboard() {
 
   function copyToClipboard(text) {
     navigator.clipboard.writeText(text);
-    alert('✅ Copied to clipboard!');
+    alert('✓ Copied to clipboard!');
   }
 
   // Analyze user intent based on behavior
@@ -78,44 +78,44 @@ export default function Dashboard() {
 
     // High engagement = strong interest
     if (visitor.total_events > 50 || pages.some(p => p.total_time > 120)) {
-      intents.push({ type: 'High Interest', confidence: 95, icon: '🔥' });
+      intents.push({ type: 'High Interest', confidence: 95, icon: '▲' });
     }
 
     // Deep scrolling = reading content thoroughly
     const avgScroll = pages.reduce((sum, p) => sum + p.max_scroll, 0) / (pages.length || 1);
     if (avgScroll > 75) {
-      intents.push({ type: 'Detail-Oriented', confidence: 85, icon: '📖' });
+      intents.push({ type: 'Detail-Oriented', confidence: 85, icon: '■' });
     }
 
     // Multiple sessions = returning interest
     if (visitor.total_sessions > 1) {
-      intents.push({ type: 'Returning Visitor', confidence: 90, icon: '🔄' });
+      intents.push({ type: 'Returning Visitor', confidence: 90, icon: '↻' });
     }
 
     // Many clicks = actively exploring
     const totalClicks = pages.reduce((sum, p) => sum + (p.clicks?.length || 0), 0);
     if (totalClicks > 10) {
-      intents.push({ type: 'Active Explorer', confidence: 80, icon: '🔍' });
+      intents.push({ type: 'Active Explorer', confidence: 80, icon: '◆' });
     }
 
     // Has email = identified lead
     if (visitor.email) {
-      intents.push({ type: 'Qualified Lead', confidence: 100, icon: '✅' });
+      intents.push({ type: 'Qualified Lead', confidence: 100, icon: '✓' });
     }
 
     // URL pattern analysis
     const urlPatterns = pages.map(p => p.url.toLowerCase());
     if (urlPatterns.some(u => u.includes('pricing') || u.includes('plan'))) {
-      intents.push({ type: 'Price Shopping', confidence: 90, icon: '💰' });
+      intents.push({ type: 'Price Shopping', confidence: 90, icon: '$' });
     }
     if (urlPatterns.some(u => u.includes('about') || u.includes('team'))) {
-      intents.push({ type: 'Research Phase', confidence: 75, icon: '🏢' });
+      intents.push({ type: 'Research Phase', confidence: 75, icon: '□' });
     }
     if (urlPatterns.some(u => u.includes('contact') || u.includes('demo'))) {
-      intents.push({ type: 'Ready to Buy', confidence: 95, icon: '🎯' });
+      intents.push({ type: 'Ready to Buy', confidence: 95, icon: '►' });
     }
 
-    return intents.length > 0 ? intents : [{ type: 'Browsing', confidence: 50, icon: '👀' }];
+    return intents.length > 0 ? intents : [{ type: 'Browsing', confidence: 50, icon: '○' }];
   }
 
   async function sendEmail(campaign) {
@@ -131,13 +131,13 @@ export default function Dashboard() {
 
       if (result.success) {
         alert(result.demo_mode
-          ? '📧 Email logged to console (add RESEND_API_KEY to actually send)'
-          : '✅ Email sent successfully!');
+          ? '● Email logged to console (add RESEND_API_KEY to actually send)'
+          : '✓ Email sent successfully!');
       } else {
-        alert('❌ Failed to send email: ' + result.error);
+        alert('✗ Failed to send email: ' + result.error);
       }
     } catch (error) {
-      alert('❌ Error sending email: ' + error.message);
+      alert('✗ Error sending email: ' + error.message);
     } finally {
       setSendingEmail(null);
     }
@@ -252,7 +252,7 @@ export default function Dashboard() {
                 : 'text-gray-400 border-transparent hover:text-gray-300'
             }`}
           >
-            📊 Overview
+            ▦ Overview
           </button>
           <button
             onClick={() => setActiveTab('visitors')}
@@ -272,7 +272,7 @@ export default function Dashboard() {
                 : 'text-gray-400 border-transparent hover:text-gray-300'
             }`}
           >
-            📧 Campaigns ({stats?.total_campaigns || 0})
+            ● Campaigns ({stats?.total_campaigns || 0})
           </button>
         </div>
 
@@ -999,127 +999,109 @@ export default function Dashboard() {
             </div>
 
             <div className="p-6">
-              {/* PDL Enrichment Section */}
+              {/* AI Intent Summary */}
               <div className="mb-6">
-                <h3 className="text-white font-bold text-xl mb-4">🔍 People Data Labs Enrichment</h3>
-                <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
-                  {selectedVisitor.pdl_status ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <div className="text-gray-400 text-sm mb-1">PDL Status</div>
-                          <span className={`inline-block px-3 py-1 rounded text-sm font-bold ${
-                            selectedVisitor.pdl_status === 'match_found' ? 'bg-green-500/10 border border-green-500/20 text-green-400' :
-                            selectedVisitor.pdl_status === 'no_match' ? 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400' :
-                            selectedVisitor.pdl_status === 'pending' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400' :
-                            selectedVisitor.pdl_status === 'error' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
-                            'bg-gray-500/10 border border-gray-500/20 text-gray-400'
-                          }`}>
-                            {selectedVisitor.pdl_status === 'match_found' ? '✓ Match Found' :
-                             selectedVisitor.pdl_status === 'no_match' ? '✗ No Match' :
-                             selectedVisitor.pdl_status === 'pending' ? '⏳ Pending' :
-                             selectedVisitor.pdl_status === 'error' ? '⚠ Error' :
-                             selectedVisitor.pdl_status === 'no_api_key' ? 'No API Key' :
-                             selectedVisitor.pdl_status}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-gray-400 text-sm mb-1">Attempted At</div>
-                          <div className="text-white font-mono text-sm">
-                            {selectedVisitor.pdl_attempted_at ? new Date(selectedVisitor.pdl_attempted_at).toLocaleString() : 'N/A'}
-                          </div>
-                        </div>
-                      </div>
+                <h3 className="text-white font-bold text-xl mb-4">► AI Intent Summary</h3>
+                <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-6">
+                  {(() => {
+                    // Generate AI summary based on visitor behavior
+                    const properties = [];
+                    const imageClickCount = selectedVisitor.all_events?.filter(e =>
+                      e.click_data?.image_clicked && e.click_data?.is_property_image
+                    ).length || 0;
 
-                      {selectedVisitor.pdl_status === 'match_found' && selectedVisitor.pdl_data && (
-                        <div className="border-t border-gray-700 pt-4 mt-4">
-                          <div className="text-green-400 font-bold mb-3">✅ Enriched Data from PDL:</div>
-                          <div className="grid grid-cols-2 gap-4">
-                            {selectedVisitor.pdl_data.full_name && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Full Name</div>
-                                <div className="text-white font-bold">{selectedVisitor.pdl_data.full_name}</div>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.emails && selectedVisitor.pdl_data.emails.length > 0 && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Emails</div>
-                                <div className="text-blue-400 font-mono text-sm">
-                                  {selectedVisitor.pdl_data.emails.slice(0, 2).join(', ')}
-                                </div>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.phone_numbers && selectedVisitor.pdl_data.phone_numbers.length > 0 && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Phone Numbers</div>
-                                <div className="text-purple-400 font-mono text-sm">
-                                  {selectedVisitor.pdl_data.phone_numbers.slice(0, 2).join(', ')}
-                                </div>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.job_title && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Job Title</div>
-                                <div className="text-white">{selectedVisitor.pdl_data.job_title}</div>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.job_company_name && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Company</div>
-                                <div className="text-white">{selectedVisitor.pdl_data.job_company_name}</div>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.location_name && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Location</div>
-                                <div className="text-white">{selectedVisitor.pdl_data.location_name}</div>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.linkedin_url && (
-                              <div className="col-span-2">
-                                <div className="text-gray-400 text-xs mb-1">LinkedIn</div>
-                                <a href={selectedVisitor.pdl_data.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm break-all">
-                                  {selectedVisitor.pdl_data.linkedin_url}
-                                </a>
-                              </div>
-                            )}
-                            {selectedVisitor.pdl_data.likelihood && (
-                              <div>
-                                <div className="text-gray-400 text-xs mb-1">Match Likelihood</div>
-                                <div className="text-green-400 font-bold">{selectedVisitor.pdl_data.likelihood}/10</div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                    if (selectedVisitor.all_events) {
+                      const propMap = {};
+                      selectedVisitor.all_events.forEach(e => {
+                        if (e.property_name && e.viewing_property) {
+                          if (!propMap[e.property_name]) propMap[e.property_name] = { name: e.property_name, views: 0 };
+                          if (e.event_type === 'pageview') propMap[e.property_name].views++;
+                        }
+                      });
+                      properties.push(...Object.values(propMap));
+                    }
 
-                      {selectedVisitor.pdl_status === 'no_match' && (
-                        <div className="border-t border-gray-700 pt-4 mt-4">
-                          <div className="text-yellow-400 text-sm">
-                            ℹ️ PDL was called but no person data found for IP: {selectedVisitor.ip_address || 'Unknown'}
-                          </div>
-                        </div>
-                      )}
+                    const totalTime = selectedVisitor.pages?.reduce((sum, p) => sum + (p.total_time || 0), 0) || 0;
+                    const avgScroll = selectedVisitor.pages?.length > 0
+                      ? Math.round(selectedVisitor.pages.reduce((sum, p) => sum + (p.max_scroll || 0), 0) / selectedVisitor.pages.length)
+                      : 0;
 
-                      {selectedVisitor.pdl_status === 'error' && (
-                        <div className="border-t border-gray-700 pt-4 mt-4">
-                          <div className="text-red-400 text-sm">
-                            ⚠️ PDL API returned an error (Status: {selectedVisitor.pdl_response_code || 'Unknown'})
+                    // Generate intent summary
+                    let summary = '';
+                    let interestLevel = 'Low';
+                    let interestColor = 'text-gray-400';
+
+                    if (properties.length > 0) {
+                      const mainProperty = properties.sort((a, b) => b.views - a.views)[0];
+                      summary = `Visitor is actively exploring ${mainProperty.name}`;
+
+                      if (imageClickCount > 5) {
+                        summary += `, clicked through ${imageClickCount} property images`;
+                        interestLevel = 'Very High';
+                        interestColor = 'text-green-400';
+                      } else if (imageClickCount > 0) {
+                        summary += `, viewed ${imageClickCount} property images`;
+                        interestLevel = 'High';
+                        interestColor = 'text-green-400';
+                      }
+
+                      if (totalTime > 180) {
+                        summary += `, spent ${Math.round(totalTime / 60)} minutes on site`;
+                      }
+
+                      if (avgScroll > 75) {
+                        summary += `, thoroughly reviewed content (${avgScroll}% scroll depth)`;
+                      }
+
+                      if (selectedVisitor.total_sessions > 1) {
+                        summary += `. Returned ${selectedVisitor.total_sessions} times - showing strong interest`;
+                        interestLevel = 'Very High';
+                        interestColor = 'text-green-400';
+                      }
+
+                      summary += '.';
+
+                      if (selectedVisitor.email) {
+                        summary += ` ✓ Email captured: ${selectedVisitor.email}. Ready for sales outreach.`;
+                        interestLevel = 'Qualified Lead';
+                        interestColor = 'text-cyan-400';
+                      } else {
+                        summary += ' No email captured yet - recommend remarketing campaign.';
+                      }
+                    } else {
+                      summary = `Visitor browsed ${selectedVisitor.pages?.length || 0} pages, `;
+                      if (avgScroll > 60) {
+                        summary += `engaged with content (${avgScroll}% scroll). `;
+                        interestLevel = 'Medium';
+                        interestColor = 'text-yellow-400';
+                      } else {
+                        summary += `limited engagement (${avgScroll}% scroll). `;
+                      }
+                      summary += selectedVisitor.email ? 'Email captured.' : 'No email captured yet.';
+                    }
+
+                    return (
+                      <>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="px-4 py-2 bg-purple-500/20 border border-purple-500/40 rounded-lg">
+                            <span className={`font-bold ${interestColor}`}>Interest Level: {interestLevel}</span>
+                          </div>
+                          <div className="text-gray-400 text-sm">
+                            {selectedVisitor.total_events} events • {selectedVisitor.total_sessions} sessions
                           </div>
                         </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-gray-500 text-center py-4">
-                      PDL enrichment not attempted for this visitor (tracked before PDL integration)
-                    </div>
-                  )}
+                        <p className="text-gray-300 leading-relaxed">
+                          {summary}
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
-              {/* Intent Analysis */}
+              {/* Intent Tags */}
               <div className="mb-6">
-                <h3 className="text-white font-bold text-xl mb-4">🎯 User Intent Analysis</h3>
+                <h3 className="text-white font-bold text-xl mb-4">◆ Behavior Tags</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {analyzeUserIntent(selectedVisitor).map((intent, idx) => (
                     <div
@@ -1142,7 +1124,7 @@ export default function Dashboard() {
 
               {/* Engagement Overview */}
               <div className="mb-6">
-                <h3 className="text-white font-bold text-xl mb-4">📊 Engagement Overview</h3>
+                <h3 className="text-white font-bold text-xl mb-4">▦ Engagement Overview</h3>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
                     <div className="text-gray-400 text-sm mb-2">Total Sessions</div>
@@ -1165,7 +1147,7 @@ export default function Dashboard() {
 
               {/* Session Timeline */}
               <div className="mb-6">
-                <h3 className="text-white font-bold text-xl mb-4">📅 Session Timeline</h3>
+                <h3 className="text-white font-bold text-xl mb-4">▣ Session Timeline</h3>
                 {selectedVisitor.sessions && selectedVisitor.sessions.length > 0 ? (
                   <div className="space-y-3">
                     {selectedVisitor.sessions.map((session, idx) => (
@@ -1203,7 +1185,7 @@ export default function Dashboard() {
               {/* Selected Session Details */}
               {selectedSession && (
                 <div className="mb-6">
-                  <h3 className="text-white font-bold text-xl mb-4">🔍 Session Details</h3>
+                  <h3 className="text-white font-bold text-xl mb-4">◆ Session Details</h3>
                   <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-6">
                     <div className="grid grid-cols-3 gap-4 mb-6">
                       <div>
@@ -1228,16 +1210,16 @@ export default function Dashboard() {
               {/* Pages Visited */}
               {selectedVisitor.pages && selectedVisitor.pages.length > 0 && (
                 <div>
-                  <h3 className="text-white font-bold text-xl mb-4">📄 Pages Visited</h3>
+                  <h3 className="text-white font-bold text-xl mb-4">▣ Pages Visited</h3>
                   <div className="space-y-4">
                     {selectedVisitor.pages.map((page, idx) => (
                       <div key={idx} className="bg-gray-900/50 border border-gray-700 rounded-lg p-5">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <h4 className="text-white font-bold text-lg mb-1">
-                              {page.title || 'Untitled Page'}
+                              {formatPagePath(page.url)}
                             </h4>
-                            <p className="text-blue-400 text-sm mb-2 break-all">{page.url}</p>
+                            <p className="text-gray-500 text-xs mb-2 font-mono truncate">{new URL(page.url).pathname}</p>
                             <div className="flex items-center gap-4 text-sm">
                               <span className="text-gray-400">
                                 Visited <span className="text-white font-bold">{page.visits}x</span>
@@ -1288,6 +1270,77 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+
+              {/* Property Insights */}
+              {(() => {
+                // Extract property-specific data from events
+                const propertyData = {};
+                const imageClicks = [];
+
+                if (selectedVisitor.all_events) {
+                  selectedVisitor.all_events.forEach(event => {
+                    // Track property views
+                    if (event.property_name && event.viewing_property) {
+                      if (!propertyData[event.property_name]) {
+                        propertyData[event.property_name] = {
+                          name: event.property_name,
+                          slug: event.property_slug,
+                          views: 0,
+                          imageClicks: 0,
+                          totalTime: 0
+                        };
+                      }
+                      if (event.event_type === 'pageview') {
+                        propertyData[event.property_name].views++;
+                      }
+                    }
+
+                    // Track image clicks
+                    if (event.click_data?.image_clicked && event.click_data?.is_property_image) {
+                      imageClicks.push({
+                        property: event.property_name || 'Unknown',
+                        image: event.click_data.image_src,
+                        timestamp: event.timestamp
+                      });
+                      if (event.property_name && propertyData[event.property_name]) {
+                        propertyData[event.property_name].imageClicks++;
+                      }
+                    }
+                  });
+                }
+
+                const properties = Object.values(propertyData);
+
+                return properties.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-white font-bold text-xl mb-4">▣ Property Interest</h3>
+                    <div className="space-y-3">
+                      {properties.map((prop, idx) => (
+                        <div key={idx} className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/30 rounded-lg p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="text-white font-bold text-lg">{prop.name}</h4>
+                              <div className="flex items-center gap-4 mt-2 text-sm">
+                                <span className="text-gray-400">
+                                  ● {prop.views} page view{prop.views !== 1 ? 's' : ''}
+                                </span>
+                                {prop.imageClicks > 0 && (
+                                  <span className="text-green-400">
+                                    ▸ {prop.imageClicks} image{prop.imageClicks !== 1 ? 's' : ''} clicked
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="px-4 py-2 bg-green-500/20 border border-green-500/40 rounded-lg">
+                              <span className="text-green-300 font-bold text-sm">High Interest</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1309,17 +1362,59 @@ export default function Dashboard() {
   );
 }
 
+function formatPagePath(url) {
+  try {
+    const urlObj = new URL(url);
+    const path = urlObj.pathname;
+
+    // Parse property pages
+    const propertyMatch = path.match(/\/properties\/([^\/]+)/);
+    if (propertyMatch) {
+      const slug = propertyMatch[1];
+      const propertyName = slug.split('-').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+      return `Property: ${propertyName}`;
+    }
+
+    // Parse other common pages
+    const pageMap = {
+      '/': 'Home',
+      '/properties': 'Properties',
+      '/sell-your-land': 'Sell Your Land',
+      '/team': 'Team',
+      '/community': 'Community',
+      '/development': 'Development',
+      '/privacy-policy': 'Privacy Policy',
+      '/terms-of-use': 'Terms of Use',
+      '/thank-you': 'Thank You',
+      '/thank-you-qualified': 'Thank You (Qualified)',
+      '/thank-you-dq': 'Thank You (DQ)',
+      '/thank-dispo': 'Thank You (Dispo)'
+    };
+
+    if (pageMap[path]) {
+      return pageMap[path];
+    }
+
+    // Default: clean path without query params
+    return path;
+  } catch (e) {
+    return url;
+  }
+}
+
 function getEventIcon(eventType) {
   const icons = {
-    pageview: '👁️',
-    click: '👆',
-    form_submit: '📝',
-    scroll: '📜',
-    time_on_page: '⏱️',
-    page_exit: '👋',
-    identify: '🎯'
+    pageview: '●',
+    click: '▸',
+    form_submit: '■',
+    scroll: '▼',
+    time_on_page: '○',
+    page_exit: '×',
+    identify: '►'
   };
-  return icons[eventType] || '📌';
+  return icons[eventType] || '▪';
 }
 
 function getEventTitle(eventType) {
